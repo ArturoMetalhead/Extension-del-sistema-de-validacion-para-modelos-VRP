@@ -1,0 +1,224 @@
+#+TITLE: VRP load
+#+AUTHOR: Alejandra Monzon Penna
+
+* Orden de lectura de los ORG 
+
+=vrp-characteristics.org=
+=vrp-prerequisites.org=
+=vrp-problem-solution-pair.org=
+=vrp-high-level-strategy.org=
+=vrp-generate-solution.org=
+=vrp-variables-parameters.org=
+=vrp-from-high-to-low.org=
+
+El codigo esta organizado en diferentes archivos, pero el sistema necesita de todos ellos para funcionar.
+
+* Definir paquete vrp 
+
+  #+begin_src lisp :results none :export code :tangle ./src/vrp-package.lisp
+			(defpackage :vrp
+			(:import-from :lmml :symb
+			      :mkstr 
+			      :make-keyword
+			      :bformat
+			      :lisp
+			      :*my-var-param-set-list*)
+			(:use :cl-user :common-lisp :gagm)
+			(:shadow random round))
+   #+end_src
+
+
+* Definir el paquete av-vrp
+
+   #+begin_src lisp :results none :export code :tangle ./src/av-vrp-package.lisp
+     (defpackage :av-vrp
+       (:shadowing-import-from :lmml :set + / - * >= <= = < >)
+       (:import-from :lmml :mkstr
+			   :symb
+			   :make-keyword
+			   :bformat
+			   :for-all-quantifier
+			   :sumf
+			   :variable-declaration
+			   :problem
+			   :parameter
+			   :constraint
+			   :minimize
+			   :maximize
+			   :continuous-variable
+			   :integer-variable
+			   :binary-variable
+			   :lisp
+			   :*my-var-param-set-list*
+			   :gmpl)
+
+	    (:import-from :vrp
+			  ;;  vrp charactristics
+			       :visit-client-at-most-once
+			       :dont-overload-vehicle
+			       :begin-in-depot
+			       :begin-in-depot
+			       :visit-each-client-at-least-once
+
+			   ;; define vrp and current high level strategy    
+			       :def-vrp-description
+			       :basic-strategy
+
+			   ;; sets, variables and parameters
+			       :number-vehicles
+			       :capacity-vehicles
+			       :vehicle-goes-from-client-i-to-j
+			       :demand-each-client
+			       :vehicles-charge-after-client-i
+			       :vehicles-charge-residual-from-client-i-to-j
+			       :client-set
+			       :client-depot-set
+			       :number-clients
+
+			    ;; model evaluator
+			       :model-evaluator
+
+			       )
+	(:use :cl-user :common-lisp :gagm))
+   #+end_src
+
+* Load
+
+
+
+** lmml
+
+Para cargar los archivos de LMML desde la carpeta lmml/src 
+
+   #+BEGIN_SRC lisp :results output :exports code :tangle ./src/vrp-load.lisp
+
+     (defun fload (filename)
+	 (let* ((dot-string (make-string (cl:- 50 (cl:+ 3 (length filename)))
+			       :initial-element #\.)))
+	 (format t "Loading ~a ..." filename)
+	 (load filename)
+	 (format t "~a OK~%" dot-string)))
+
+      (format t "Files form lmml: ~%")
+     (fload "lmml/src/gagm.lisp")
+     (fload "lmml/src/package.lisp")
+     (fload "lmml/src/generic-functions.lisp")
+     (fload "lmml/src/utilities.lisp")
+     (fload "lmml/src/macros.lisp")
+     (fload "lmml/src/reader-macros.lisp")
+     (fload "lmml/src/infix-to-prefix.lisp")
+     (fload "lmml/src/ast-nodes.lisp")
+     (fload "lmml/src/basic-language.lisp")
+     (fload "lmml/src/code-generation-utils.lisp")
+     (fload "lmml/src/problem-examples.lisp")
+     (fload "lmml/src/writer-gmpl.lisp")
+     (fload "lmml/src/lmml-case-sensitivity.lisp")
+     (format t "~%Files from src~%")
+     (fload  "./src/vrp-function-generator.lisp")
+
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+Files form lmml: 
+Loading lmml/src/gagm.lisp ................................ OK
+Loading lmml/src/package.lisp ............................. OK
+Loading lmml/src/generic-functions.lisp ................... OK
+Loading lmml/src/utilities.lisp ........................... OK
+Loading lmml/src/macros.lisp .............................. OK
+Loading lmml/src/reader-macros.lisp ....................... OK
+Loading lmml/src/infix-to-prefix.lisp ..................... OK
+Loading lmml/src/ast-nodes.lisp ........................... OK
+Loading lmml/src/basic-language.lisp ...................... OK
+Loading lmml/src/code-generation-utils.lisp ............... OK
+Loading lmml/src/problem-examples.lisp .................... OK
+Loading lmml/src/writer-gmpl.lisp ......................... OK
+Loading lmml/src/lmml-case-sensitivity.lisp ............... OK
+
+Files from src
+Loading ./src/vrp-function-generator.lisp ................. OK
+#+end_example
+
+
+** utils 
+
+En la carpeta utils se encuentran los siguientes archivos:
+
+=vrp-package.lisp= Definicion de un paquete VRP
+=vrp-random-number-generation.lisp= Codigo para la generacion de valores aleatoreos
+=vrp-utilities.lisp= Codigo con funciones para hacer keywords, simbolos, etc
+=vrp-utils.lisp= Codigo con funciones basicas sobre listas (particiones, permutaciones, nthcar)
+
+Todos ellos son de proyectos anteriores y por tanto no tienen .org asociados
+
+#+BEGIN_SRC lisp :results output :exports code :tangle ./src/vrp-load.lisp
+  (format t "~%Package VRP~%")
+  (fload  "./src/vrp-package.lisp")
+
+
+#+END_SRC
+
+#+RESULTS:
+: 
+: Package VRP
+: Loading ./src/vrp-package.lisp ............................ OK
+
+#+BEGIN_SRC lisp :results output :exports code :tangle ./src/vrp-load.lisp
+
+  (format t "~%Files form utils: ~%")
+  (fload "./utils/vrp-random-number-generation.lisp")
+  (fload "./utils/vrp-utils.lisp")
+
+
+#+END_SRC
+
+#+RESULTS:
+: 
+: Files form utils: 
+: Loading ./utils/vrp-random-number-generation.lisp ......... OK
+: Loading ./utils/vrp-utils.lisp ............................ OK
+
+** src
+
+#+BEGIN_SRC lisp :results output :exports code :tangle ./src/vrp-load.lisp
+  (format t "~%Files form src~%")
+  (fload  "./src/vrp-utils.lisp")
+  (fload  "./src/vrp-characteristics.lisp")
+  (fload  "./src/vrp-description-definition.lisp")
+  (fload  "./src/vrp-prerequisites.lisp")
+  (fload  "./src/vrp-problem-solution-pair.lisp")
+  (fload  "./src/vrp-high-level-strategy.lisp")
+  (fload  "./src/vrp-generate-solution.lisp")
+  (fload  "./src/vrp-variables-parameters.lisp")
+  (fload  "./src/vrp-from-high-to-low.lisp")
+  (fload  "./src/vrp-model-evaluator.lisp")
+
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+
+Files form src
+Loading ./src/vrp-utils.lisp .............................. OK
+Loading ./src/vrp-characteristics.lisp .................... OK
+Loading ./src/vrp-description-definition.lisp ............. OK
+Loading ./src/vrp-prerequisites.lisp ...................... OK
+Loading ./src/vrp-problem-solution-pair.lisp .............. OK
+Loading ./src/vrp-high-level-strategy.lisp ................ OK
+Loading ./src/vrp-generate-solution.lisp .................. OK
+Loading ./src/vrp-variables-parameters.lisp ............... OK
+Loading ./src/vrp-from-high-to-low.lisp ................... OK
+#+end_example
+
+
+#+BEGIN_SRC lisp :results output :exports code :tangle ./src/vrp-load.lisp
+  (format t "~%Package AV-VRP~%")
+  (fload  "./src/av-vrp-package.lisp")
+#+END_SRC
+
+#+RESULTS:
+: 
+: Package AV-VRP
+: Loading ./src/av-vrp-package.lisp ......................... OK
+
+

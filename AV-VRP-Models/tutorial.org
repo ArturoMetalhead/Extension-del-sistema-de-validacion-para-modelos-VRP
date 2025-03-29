@@ -1,0 +1,2160 @@
+q#+TITLE: VRP tutorial
+#+AUTHOR: Alejandra Monzon Penna
+
+* Tutorial para utilizar el sistema de validacion automatica
+** Descripcion
+
+En este tutorial se explica todo lo necesario para poder usar el Sistema de Validacion Automatica de Modelos de VRP.
+
+En este tutorial se asume que el usuario tiene conocimientos basicos de lisp y que esta utilizando Emacs.
+
+** Archivos necesarios
+
+Para utilizar el sistema se requieren de los siguientes archivos:
+
+- vrp-characteristics.org
+- vrp-prerequisites.org
+- vrp-problem-solution-pair.org
+- vrp-high-level-strategy.org
+- vrp-generate-solution.org
+- vrp-variables-parameters.org
+- vrp-from-high-to-low.org
+- vrp-function-generator.org
+- vrp-model-evaluator.org
+- vrp-load.org
+- vrp-random-number-generator.lisp
+- vrp-utils.lisp
+
+Ademas se requiere de los archivos del sistema LMML.
+
+** Organizar el sistema de archivos
+
+Primero siga los pasos que indica el tutorial de LMML (documentation.org) para Organizar su sistema de archivos.
+
+Una vez realizado esto tendra una carpeta =lmml= con todos los
+archivos necesarios para que LMML funcione.
+
+Luego es necesario crear una carpeta en la que copiar todos los archivos, esta carpeta sera /AV-VRP-Models
+
+Una vez copiados todos los archivos y la carpeta lmml a /AV-VRP-Models, esta debe lucir asi:
+
+      | lmml                                |
+      | vrp-characteristics.org             |
+      | vrp-prerequisites.org               |
+      | vrp-problem-solution-pair.org       |
+      | vrp-high-level-strategy.org         |
+      | vrp-generate-solution.org           |
+      | vrp-variables-parameters.org        |
+      | vrp-from-high-to-low.org            |
+      | vrp-function-generator.org          |
+      | vrp-model-evaluator.org             |
+      | vrp-load.org                        |
+      | vrp-random-number-generator.lisp    |
+      | vrp-utils.lisp                      |
+
+Ahora se deben crear dos caarpetas en el interior de /AV-VRP-Models, una debe llamarse =utils= y la otr =src=. Una vez hecho esto la estructura debe ser:
+
+
+      | lmml                                |
+      | src                                 |
+      | utils                               |
+      | vrp-characteristics.org             |
+      | vrp-prerequisites.org               |
+      | vrp-problem-solution-pair.org       |
+      | vrp-high-level-strategy.org         |
+      | vrp-generate-solution.org           |
+      | vrp-variables-parameters.org        |
+      | vrp-from-high-to-low.org            |
+      | vrp-function-generator.org          |
+      | vrp-model-evaluator.org             |
+      | vrp-load.org                        |
+      | vrp-random-number-generator.lisp    |
+      | vrp-utils.lisp                      |
+
+Por ultimo, moveremos los archivos =vrp-random-number-generator.lisp= y
+=vrp-utils.lisp= a la carpeta =utils=; quedando la estructura
+
+      | lmml                                |
+      | src                                 |
+      | utils                               |
+      | vrp-characteristics.org             |
+      | vrp-prerequisites.org               |
+      | vrp-problem-solution-pair.org       |
+      | vrp-high-level-strategy.org         |
+      | vrp-generate-solution.org           |
+      | vrp-variables-parameters.org        |
+      | vrp-from-high-to-low.org            |
+      | vrp-function-generator.org          |
+      | vrp-model-evaluator.org             |
+      | vrp-load.org                        |
+
+Una vez hecho esto, se puede proceder a generar el codigo fuente de los archivos *.org* para esto es suficiente con abrir cada archivo y hacer =C-c C-v t=
+
+Ahora todo esta listo para iniciar lisp y cargar el sistema.
+
+** Cargar el sistema a lisp
+
+     1. Iniciar Lisp (=M-x slime=)(esto abrira el REPL) 
+     2. Cambiar al directorio del sistema (poner =,= en el REPL, luego =cd= y el directorio, en este caso ir a /AV-VRP-Models)
+     3. Cargar los archivos (para ello basta con cargar =src/vrp-load.lisp=)
+
+     #+BEGIN_SRC lisp :results output
+       (load "src/vrp-load.lisp")
+     #+END_SRC
+
+     #+RESULTS:
+     #+begin_example
+     Files form lmml: 
+     Loading lmml/src/gagm.lisp ................................ OK
+     Loading lmml/src/package.lisp ............................. OK
+     Loading lmml/src/generic-functions.lisp ................... OK
+     Loading lmml/src/utilities.lisp ........................... OK
+     Loading lmml/src/macros.lisp .............................. OK
+     Loading lmml/src/reader-macros.lisp ....................... OK
+     Loading lmml/src/infix-to-prefix.lisp ..................... OK
+     Loading lmml/src/ast-nodes.lisp ........................... OK
+     Loading lmml/src/basic-language.lisp ...................... OK
+     Loading lmml/src/code-generation-utils.lisp ............... OK
+     Loading lmml/src/problem-examples.lisp .................... OK
+     Loading lmml/src/writer-gmpl.lisp ......................... OK
+     Loading lmml/src/lmml-case-sensitivity.lisp ............... OK
+
+     Files from src
+     Loading ./src/vrp-function-generator.lisp ................. OK
+
+     Package VRP
+     Loading ./src/vrp-package.lisp ............................ OK
+
+     Files form utils: 
+     Loading ./utils/vrp-random-number-generation.lisp ......... OK
+     Loading ./utils/vrp-utils.lisp ............................ OK
+
+     Files form src
+     Loading ./src/vrp-utils.lisp .............................. OK
+     Loading ./src/vrp-characteristics.lisp .................... OK
+     Loading ./src/vrp-description-definition.lisp ............. OK
+     Loading ./src/vrp-prerequisites.lisp ...................... OK
+     Loading ./src/vrp-problem-solution-pair.lisp .............. OK
+     Loading ./src/vrp-high-level-strategy.lisp ................ OK
+     Loading ./src/vrp-generate-solution.lisp .................. OK
+     Loading ./src/vrp-variables-parameters.lisp ............... OK
+     Loading ./src/vrp-from-high-to-low.lisp ................... OK
+     Loading ./src/vrp-model-evaluator.lisp .................... OK
+
+     Package AV-VRP
+     Loading ./src/av-vrp-package.lisp ......................... OK
+     #+end_example
+
+     Si todo sale bien el resultado debe ser:
+
+         #+RESULTS:
+	 #+begin_example
+	 Files form lmml: 
+	 Loading lmml/src/gagm.lisp ................................ OK
+	 Loading lmml/src/package.lisp ............................. OK
+	 Loading lmml/src/generic-functions.lisp ................... OK
+	 Loading lmml/src/utilities.lisp ........................... OK
+	 Loading lmml/src/macros.lisp .............................. OK
+	 Loading lmml/src/reader-macros.lisp ....................... OK
+	 Loading lmml/src/infix-to-prefix.lisp ..................... OK
+	 Loading lmml/src/ast-nodes.lisp ........................... OK
+	 Loading lmml/src/basic-language.lisp ...................... OK
+	 Loading lmml/src/code-generation-utils.lisp ............... OK
+	 Loading lmml/src/problem-examples.lisp .................... OK
+	 Loading lmml/src/writer-gmpl.lisp ......................... OK
+	 Loading lmml/src/lmml-case-sensitivity.lisp ............... OK
+	 
+	 Files from src
+	 Loading ./src/vrp-function-generator.lisp ................. OK
+	 
+	 Package VRP
+	 Loading ./src/vrp-package.lisp ............................ OK
+	 
+	 Files form utils: 
+	 Loading ./utils/vrp-random-number-generation.lisp ......... OK
+	 Loading ./utils/vrp-utils.lisp ............................ OK
+	 
+	 Files form src
+	 Loading ./src/vrp-utils.lisp .............................. OK
+	 Loading ./src/vrp-characteristics.lisp .................... OK
+	 Loading ./src/vrp-description-definition.lisp ............. OK
+	 Loading ./src/vrp-prerequisites.lisp ...................... OK
+	 Loading ./src/vrp-problem-solution-pair.lisp .............. OK
+	 Loading ./src/vrp-high-level-strategy.lisp ................ OK
+	 Loading ./src/vrp-generate-solution.lisp .................. OK
+	 Loading ./src/vrp-variables-parameters.lisp ............... OK
+	 Loading ./src/vrp-from-high-to-low.lisp ................... OK
+	 Loading ./src/vrp-model-evaluator.lisp .................... OK
+	 
+	 Package AV-VRP
+	 Loading ./src/av-vrp-package.lisp ......................... OK
+	 #+end_example
+
+En caso contrario, revise que la estructura de la carpeta sea correcta y que haya generado el codigo fuente de todos los archvos.
+
+** Ejemplo practico del funcionamiento del sistema para el CVRP
+*** Descripcion
+
+En este ejemplo se muestra como validar un modelo para el CVRP en el sistema
+
+*** Creacion del modelo
+
+Para crear el modelo se utiliza LMML, si no sabe como utilizar LMML para representar un modelo matematico lease el tutorial =/lmml/documentacion.org= del sistema LMML.
+
+Primero debemos cambiar al paquete =LMML= esto se hace con:
+
+   #+begin_src lisp :results value
+         (in-package :lmml)
+   #+end_src
+
+   #+RESULTS:
+   : #<PACKAGE "LMML">
+
+ Luego definir con lmml tres modelos para CVRP, uno que sabemos que es correcto (CVRP es un problema muy basico y ampliamente utilizado en la literatura, por eso lo usamos de ejmplo XD) =cvrp-model-rigth= y dos que sabemos no lo es =cvrp-model-wrong=: 
+
+  #+BEGIN_SRC lisp :results value
+    (problem cvrp-model-rigth "CVRP Commodity Flow [RIGTH]"
+	     (set V)
+	     (set I)
+
+	     (parameter c :domain {V V})
+	     (parameter d :domain {V})
+	     (parameter n)
+	     (parameter P)
+	     (parameter K)
+
+	     (variable-declaration x :domain {V V} :var-type binary-variable)
+	     (variable-declaration y :domain {V V})
+
+	     (minimize "obj" (sumf ((a in V))  (sumf ((b in V)) (* [x a b] [c a b]))))
+	     
+	     (constraint "r1" (= (sumf ((b in V)) (- [y b a] [y a b])) (* 2 [d a]))
+						   :quantifiers ((for-all-quantifier a I)))
+	     (constraint "r2" (= (sumf ((b in I)) [y 0 b]) (sumf ((a in I)) [d a])))
+	     (constraint "r3" (= (sumf ((b in I)) [y b 0]) (- (* K P) (sumf ((a in I)) [d a]) )))
+	     (constraint "r4" (= (sumf ((b in I)) [y (+ n 1) b]) (* K P)))
+	     (constraint "r5" (= (+ [y a b] [y b a]) (* P (+ [x a b] [x b a])))
+						 :quantifiers ((for-all-quantifier a V)
+							       (for-all-quantifier b V (< a b))))
+	     (constraint "r6" (= (sumf ((b in V)) [x a b]) 1)
+						   :quantifiers ((for-all-quantifier a I)))
+	     (constraint "r7" (= (sumf ((b in V)) [x b a]) 1)
+						   :quantifiers ((for-all-quantifier a I))))
+
+  #+END_SRC
+
+  #+RESULTS:
+  : CVRP-MODEL-RIGTH
+
+
+    #+BEGIN_SRC lisp :results value
+	 (problem cvrp-model-wrong "CVRP Commodity Flow [WRONG]"
+		  (set V)
+		  (set I)
+
+		  (parameter c :domain {V V})
+		  (parameter d :domain {V})
+		  (parameter n)
+		  (parameter P)
+		  (parameter K)
+
+		  (variable-declaration x :domain {V V} :var-type binary-variable)
+		  (variable-declaration y :domain {V V})
+
+		  (minimize "obj" (sumf ((a in V))  (sumf ((b in V))	 (* [x a b] [c a b]))))
+
+		  (constraint "r1" (= (sumf ((b in V)) (- [y b a] [y a b])) (* 2 [d a]))
+							:quantifiers ((for-all-quantifier a I)))
+		  (constraint "r2" (= (sumf ((b in I)) [y 0 b]) (sumf ((a in I)) [d a])))
+		  (constraint "r3" (= (sumf ((b in I)) [y b 0]) (+ (+ K P) (sumf ((a in I)) [d a]) )))
+		  (constraint "r4" (= (sumf ((b in I)) [y (+ n 1) b]) (* K P)))
+		  (constraint "r5" (= (+ [y a b] [y b a]) (* P (+ [x a b] [x b a])))
+			                                :quantifiers ((for-all-quantifier a V)
+					                              (for-all-quantifier b V (< a b))))
+		  (constraint "r6" (> (sumf ((b in V)) [x a b]) 1)
+							:quantifiers ((for-all-quantifier a I)))
+		  (constraint "r7" (= (sumf ((b in V)) [x b a]) 1)
+							:quantifiers ((for-all-quantifier a I))))
+
+  #+END_SRC
+
+  #+RESULTS:
+  : CVRP-MODEL-WRONG
+
+   #+BEGIN_SRC lisp :results value
+    (problem cvrp-model-wrong-2 "CVRP Commodity Flow [WRONG 2]"
+	    	     (set V)
+	     (set I)
+
+	     (parameter c :domain {V V})
+	     (parameter d :domain {V})
+	     (parameter n)
+	     (parameter P)
+	     (parameter K)
+
+	     (variable-declaration x :domain {V V} :var-type binary-variable)
+	     (variable-declaration y :domain {V V})
+
+	     (minimize "obj" (sumf ((a in V))  (sumf ((b in V)) (* [x a b] [c a b]))))
+	     
+	     (constraint "r1" (= (sumf ((b in V)) (- [y b a] [y a b])) (* 2 [d a]))
+						   :quantifiers ((for-all-quantifier a I)))
+	     (constraint "r2" (= (sumf ((b in I)) [y 0 b]) (sumf ((a in I)) [d a])))
+	    
+	     (constraint "r6" (= (sumf ((b in V)) [x a b]) 1)
+						   :quantifiers ((for-all-quantifier a I)))
+	     (constraint "r7" (= (sumf ((b in V)) [x b a]) 1)
+						   :quantifiers ((for-all-quantifier a I))))
+
+  #+END_SRC
+
+  #+RESULTS:
+  : CVRP-MODEL-WRONG-2
+
+
+ Estos modelos en GMLP quedarian como:
+
+       #+begin_src lisp :results output
+	 (format t "~a~%" (generate-code cvrp-model-rigth gmpl t))
+	 (format t "~a~%" (generate-code cvrp-model-wrong gmpl t))
+	 (format t "~a~%" (generate-code cvrp-model-wrong-2 gmpl t))
+       #+end_src
+
+       #+RESULTS:
+       #+begin_example
+       /*Problem CVRP Commodity Flow [RIGTH]*/
+
+
+       set V;
+
+       set I;
+
+       param C {i in V, j in V};
+
+       param D {i in V};
+
+       param N;
+
+       param P;
+
+       param K;
+
+       var X {i in V, j in V}, binary, >= 0;
+
+       var Y {i in V, j in V}, >= 0;
+
+       minimize obj: sum {A in V} sum {B in V} X[A, B]*C[A, B];
+
+       s.t. r1 {A in I}: sum {B in V} Y[B, A] - Y[A, B] = 2*D[A];
+
+       s.t. r2: sum {B in I} Y[0, B] = sum {A in I} D[A];
+
+       s.t. r3: sum {B in I} Y[B, 0] = K*P - sum {A in I} D[A];
+
+       s.t. r4: sum {B in I} Y[N + 1, B] = K*P;
+
+       s.t. r5 {A in V, B in V}: Y[A, B] + Y[B, A] = P*(X[A, B] + X[B, A]);
+
+       s.t. r6 {A in I}: sum {B in V} X[A, B] = 1;
+
+       s.t. r7 {A in I}: sum {B in V} X[B, A] = 1;
+
+       end;
+       NIL
+       /*Problem CVRP Commodity Flow [WRONG]*/
+
+
+       set V;
+
+       set I;
+
+       param C {i in V, j in V};
+
+       param D {i in V};
+
+       param N;
+
+       param P;
+
+       param K;
+
+       var X {i in V, j in V}, binary, >= 0;
+
+       var Y {i in V, j in V}, >= 0;
+
+       minimize obj: sum {A in V} sum {B in V} X[A, B]*C[A, B];
+
+       s.t. r1 {A in I}: sum {B in V} Y[B, A] - Y[A, B] = 2*D[A];
+
+       s.t. r2: sum {B in I} Y[0, B] = sum {A in I} D[A];
+
+       s.t. r3: sum {B in I} Y[B, 0] = K + P + sum {A in I} D[A];
+
+       s.t. r4: sum {B in I} Y[N + 1, B] = K*P;
+
+       s.t. r5 {A in V, B in V}: Y[A, B] + Y[B, A] = P*(X[A, B] + X[B, A]);
+
+       s.t. r6 {A in I}: sum {B in V} X[A, B] > 1;
+
+       s.t. r7 {A in I}: sum {B in V} X[B, A] = 1;
+
+       end;
+       NIL
+       /*Problem CVRP Commodity Flow [WRONG 2]*/
+
+
+       set V;
+
+       set I;
+
+       param C {i in V, j in V};
+
+       param D {i in V};
+
+       param N;
+
+       param P;
+
+       param K;
+
+       var X {i in V, j in V}, binary, >= 0;
+
+       var Y {i in V, j in V}, >= 0;
+
+       minimize obj: sum {A in V} sum {B in V} X[A, B]*C[A, B];
+
+       s.t. r1 {A in I}: sum {B in V} Y[B, A] - Y[A, B] = 2*D[A];
+
+       s.t. r2: sum {B in I} Y[0, B] = sum {A in I} D[A];
+
+       s.t. r6 {A in I}: sum {B in V} X[A, B] = 1;
+
+       s.t. r7 {A in I}: sum {B in V} X[B, A] = 1;
+
+       end;
+       NIL
+       #+end_example
+
+*** Declarar significado de variables, parametros y conjuntos del modelo
+
+Es necesario especificar el significado de las variables, parametros y conjuntos utilizados, para esto es necesario crear una lista de listas,de la forma:
+
+(.... (<param-var-set-name> . <param-var-set-meaning>) ...)
+
+Donde:
+
+=param-var-set-name=: es el nombre (simbolo) de la variable, parametro o conjunto en el modelo
+=param-var-set-meaning=: es el significado (simbolo de clases implementadas) de la variable, parametro o conjunto
+
+Actualmente en el sistema se tienen implementadas las siguientes clases de significados:
+
+=number-vehicles= Parametro que indica la cantidad de vehiculos
+=capacity-vehicles= Parametro que indica la capacidad de los vehiculos
+=number-clients= Parametro que indica la cantidad de clientes
+=min-vehicles-subset= Parametro cantidad minima de vehiculos que se necesita para cada posible subconjunto de clientes
+=demand-each-client= Parametro demanda de cada cliente
+
+=client-set= Conjunto de clientes {1,2,...,n}
+=client-depot-set= Conjunto que incluye a los clientes y al deposito como 0 y n+1, {0,1,2,...,n,n+1}
+
+
+=vehicle-goes-from-client-i-to-j= Variable binaria si un vehiculo viaja del cliente *i* al *j*
+=vehicles-charge-after-client-i= Variable carga que le queda al vehiculo luego de pasar por el cliente i
+=vehicles-charge-residual-from-client-i-to-j= Variable carga que le queda al vehiculo al pasar del cliente *i* al *j* y carga residual
+
+Para poder declarar los significados de las variables, parametros y conjuntos del modelo, primero debemos cambiar al paquete =VRP=:
+
+  #+begin_src lisp :results value
+         (in-package :vrp)
+  #+end_src
+
+  #+RESULTS:
+  : #<PACKAGE "VRP">
+
+Luego, la lista de variables, parametros y conjunto con sus respectivos significados queda:
+
+  #+begin_src lisp :results value
+    (defparameter param-variable-set-meaning (list (cons 'V 'client-depot-set)
+						   (cons 'I 'client-set)
+						   (cons 'd 'demand-each-client)
+						   (cons 'n 'number-clients)
+						   (cons 'P 'capacity-vehicles)
+						   (cons 'K 'number-vehicles)
+						   (cons 'x 'vehicle-goes-from-client-i-to-j)
+						   (cons 'y 'vehicles-charge-residual-from-client-i-to-j)))
+  #+end_src
+
+  #+RESULTS:
+  : PARAM-VARIABLE-SET-MEANING
+
+  *NOTA:* notese que para el parametro =c= (costo de ir del cliente i al j) es para el unico que no se define su significado porque
+  solo se utiliza en la funcion objetivo del modelo y el sistema solo valida la correctitud de las restricciones.
+
+*** Descripcion del VRP mediante caracteristicas
+
+Para describir el VRP se utiliza el macro =def-vrp-description=, este recibe el nombre de la descripcion del VRP y las caracteristicas de este, crea una clase con el nobre de la descripcion que herede de las caracteristicas y ademas crea el metodo =get-description-elements= que devuelve la lista de caracteristicas de la que hereda la descripcion del VRO. (=get-description-elements= no deberia tener que usarse nunca por el usuario, es para el funcionamiento interno del sistema)
+
+Actualmente el sistema tiene implementadas las caracteristicas:
+
+   - =visit-client-at-most-once=: Todos los clientes deben ser visitados a lo sumo una vez
+   - =dont-overload-vehicle=: La carga del vehículo no debe exceder a la capacidad del mismo (flota homogénea)
+   - =begin-in-depot=: Las rutas deben empezar en el depósito central
+   - =end-in-depot=: Las rutas deben terminar en el depósito central
+   - =visit-all-clients=: Todos los clientes deben ser visitados al menos una 
+
+Para crear una descripcion del CVRP se tiene:
+
+  #+begin_src lisp :results value
+    (def-vrp-description cvrp-description (visit-each-client-at-least-once
+					   dont-overload-vehicle
+					   visit-client-at-most-once
+					   begin-in-depot					
+					   end-in-depot))
+  #+end_src
+
+  #+RESULTS:
+  : #<STANDARD-METHOD VRP::GET-DESCRIPTION-ELEMENTS ((EQL CVRP-DESCRIPTION)) {10021012E3}>
+
+*** Estrategia de alto nivel
+
+En el sistema se tiene el concepto de *estrategia de alto nivel* que no es mas que una relacion entre caracteristicas de los VRP para especificar en que orden se modifican las soluciones de los tests por las caracteristicas. Ademas en la  *estrategia de alto nivel* se especifica tambien que campos se requiere en la solucion de los tests para cada caracteristica.
+
+Actualmente se tiene como estrategia de alto nivel =basic-strategy=, esta establece las siguientes dependencias
+
+_Orden entre las caracteristicas:_
+
+=visit-client-at-most-once= tiene que ocurrir antes que =dont-overload-vehicle=
+=visit-each-client-at-least-once= tiene que ocurrir antes que =visit-client-at-most-once=, =end-in-depot= y =begin-in-depot=
+
+_Campos requeridos por las caracteristicas:_
+
+=visit-each-client-at-least-once= requiere de *rutas* y *clientes*
+=dont-overload-vehicle= requiere de *rutas*, *clientes*, *cpacidad* y *demanda*
+=begin-in-depot= requiere de *rutas* y *clientes*
+=end-in-depot= requiere de *rutas* y *clientes*
+=visit-client-at-most-once= requiere de *rutas* y *clientes*
+
+
+*NOTA:* La estrategia de alto nivel solo se deberia modificar si se desea incorporar nuevas caracteristicas al sistema, crear otra estrategia de alto nivel solo es necesario si se encuentra alguna disposicion de caracteristicas para las que resulte mejor tener otro orden de ejecucion y para ello se utiliza el macro =def-high-level-strategy=.
+
+*** Evaluar el modelo
+
+El evaluador del modelo =model-evaluator= recibe el modelo en *lmml*, la lista de significados de las variables, parametros y conjuntos del modelo, la descripcion del VRP, la estrategia de alto nivel, la ruta de un archivo en el cual exportar toda la informacion de los tests y un entero que representa cuantas soluciones de cada test generar y evaluar.
+
+El evaluador devuelve el resultado para cada test, si falla alguno [FAILED] entonces se puede asegurar que el modelo esta mal, para ayudar a detectar en cual(es) restriccion(es) esta el error, el archivo en que se 
+
+Para evaluar los dos modelos creados en la seccion *Creacion del modelo* se tiene.
+
+#+BEGIN_SRC lisp :results output
+  (bformat t "MODELO CORRECTO")
+  (model-evaluator lmml::cvrp-model-rigth param-variable-set-meaning
+		   'cvrp-description 'basic-strategy "output-rigth.txt" 1000)
+
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+=================
+ MODELO CORRECTO
+=================
+
+[TEST: 1] PASSED
+[TEST: 2] PASSED
+[TEST: 3] PASSED
+[TEST: 4] PASSED
+[TEST: 5] PASSED
+[TEST: 6] PASSED
+[TEST: 7] PASSED
+[TEST: 8] PASSED
+[TEST: 9] PASSED
+[TEST: 10] PASSED
+[TEST: 11] PASSED
+[TEST: 12] PASSED
+[TEST: 13] PASSED
+[TEST: 14] PASSED
+[TEST: 15] PASSED
+[TEST: 16] PASSED
+[TEST: 17] PASSED
+[TEST: 18] PASSED
+[TEST: 19] PASSED
+[TEST: 20] PASSED
+[TEST: 21] PASSED
+[TEST: 22] PASSED
+[TEST: 23] PASSED
+[TEST: 24] PASSED
+[TEST: 25] PASSED
+[TEST: 26] PASSED
+[TEST: 27] PASSED
+[TEST: 28] PASSED
+[TEST: 29] PASSED
+[TEST: 30] PASSED
+[TEST: 31] PASSED
+[TEST: 32] PASSED
+#+end_example
+
+#+BEGIN_SRC lisp :results output
+  (bformat t "MODELO INCORRECTO")
+  (model-evaluator lmml::cvrp-model-wrong param-variable-set-meaning
+		   'cvrp-description 'basic-strategy "output-wrong.txt" 1000)
+
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+===================
+ MODELO INCORRECTO
+===================
+
+[TEST: 1] FAILED
+[TEST: 2] PASSED
+[TEST: 3] PASSED
+[TEST: 4] PASSED
+[TEST: 5] PASSED
+[TEST: 6] PASSED
+[TEST: 7] PASSED
+[TEST: 8] PASSED
+[TEST: 9] PASSED
+[TEST: 10] PASSED
+[TEST: 11] PASSED
+[TEST: 12] PASSED
+[TEST: 13] PASSED
+[TEST: 14] PASSED
+[TEST: 15] PASSED
+[TEST: 16] PASSED
+[TEST: 17] PASSED
+[TEST: 18] PASSED
+[TEST: 19] PASSED
+[TEST: 20] PASSED
+[TEST: 21] PASSED
+[TEST: 22] PASSED
+[TEST: 23] PASSED
+[TEST: 24] PASSED
+[TEST: 25] PASSED
+[TEST: 26] PASSED
+[TEST: 27] PASSED
+[TEST: 28] PASSED
+[TEST: 29] PASSED
+[TEST: 30] PASSED
+[TEST: 31] PASSED
+[TEST: 32] PASSED
+#+end_example
+
+
+#+BEGIN_SRC lisp :results output
+  (bformat t "MODELO INCORRECTO 2")
+  (model-evaluator lmml::cvrp-model-wrong-2 param-variable-set-meaning
+		   'cvrp-description 'basic-strategy "output-wrong-2.txt" 1000)
+
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+=====================
+ MODELO INCORRECTO 2
+=====================
+
+[TEST: 1] PASSED
+[TEST: 2] PASSED
+[TEST: 3] PASSED
+[TEST: 4] PASSED
+[TEST: 5] PASSED
+[TEST: 6] PASSED
+[TEST: 7] PASSED
+[TEST: 8] PASSED
+[TEST: 9] PASSED
+[TEST: 10] PASSED
+[TEST: 11] FAILED
+[TEST: 12] PASSED
+[TEST: 13] PASSED
+[TEST: 14] PASSED
+[TEST: 15] PASSED
+[TEST: 16] PASSED
+[TEST: 17] PASSED
+[TEST: 18] PASSED
+[TEST: 19] PASSED
+[TEST: 20] PASSED
+[TEST: 21] PASSED
+[TEST: 22] PASSED
+[TEST: 23] PASSED
+[TEST: 24] PASSED
+[TEST: 25] PASSED
+[TEST: 26] PASSED
+[TEST: 27] FAILED
+[TEST: 28] PASSED
+[TEST: 29] PASSED
+[TEST: 30] PASSED
+[TEST: 31] PASSED
+[TEST: 32] PASSED
+#+end_example
+
+** Extender el sistema para VRPTW
+*** Descripcion
+
+El sistema de validacion automatica permite extender su funcionamiento para validar nuevos modelos de nuevos problemas de VRP. Para extender el sistema se pueden agregar nuevas caracteristicas y nuevos significados de variables, parametros y conjuntos.
+
+*** Agregar Caracteristica
+**** Clase Caracteristica
+
+Si se desea agregar una caracteristica al sistema se debe crear una clase para esta caracteristica. Por ejemplo, sea la caracteristica *visitar a los clientes en una ventana de tiempo* se crearia una clase en lisp que represente esta caracteristica.
+
+#+BEGIN_SRC lisp +n -r :results none :exports code
+
+  (defclass visit-client-on-time-window () ())
+
+#+END_SRC
+
+De igual modo si queremos agregar la caracteristica *no exeder el tiempo maximo de una ruta* se crea la clase:
+
+#+BEGIN_SRC lisp +n -r :results none :exports code
+
+  (defclass dont-exceed-max-route-time  () ())
+
+#+END_SRC
+
+Las caracteristicas agregadas forman parte de la descripcion de un VRPTW (VRP con ventamas de tiempo)
+
+**** Clase Caracteristica Opuesta
+
+Ademas de la caracteristica que se desea agregar, se tiene que crear la caracteristica opuesta a esta, o sea para *visitar a los clientes en una ventana de tiempo*, se tiene el opuesto *visitar a los clientes fuera de la ventana de tiempo*
+
+#+BEGIN_SRC lisp +n -r :results none :exports code
+
+  (defclass visit-client-out-time-window () ())
+
+#+END_SRC
+
+De igual modo para *no exeder el tiempo maximo de una ruta* se tiene *exeder el tiempo maximo de una ruta*
+
+#+BEGIN_SRC lisp +n -r :results none :exports code
+
+  (defclass exceed-max-route-time  () ())
+
+#+END_SRC
+
+
+Ademas se debe asociar cada caracteristica a su negacion, esto se hace con el macro =def-opposite=
+
+#+BEGIN_SRC lisp +n -r :results none :exports code
+
+  (def-opposite visit-client-on-time-window visit-client-out-time-window)
+
+  (def-opposite dont-exceed-max-route-time exceed-max-route-time)
+
+#+END_SRC
+
+**** Clases requerimiento de la caracteristica
+
+Se debe definr ademas, para la caracteristica que deseemos agregar, que campos requiere que tenga un solucion.
+
+_*visitar a los clientes en una ventana de tiempo* requiere de:_
+
+clientes =clients=
+rutas =routes=
+la ventana de tiempo de cada cliente =time-window=
+cuanto demora el servicio en cada cliente =service-time= 
+cuanto se tarda en ir de un cliente a otro =travel-time=
+
+_*no exeder el tiempo maximo de una ruta* requere de:_
+
+clientes =clients=
+rutas =routes=
+cuanto demora el servicio en cada cliente =service-time= 
+cuanto se tarda en ir de un cliente a otro =travel-time=
+el tiempo maximo parmitido para las rutas =max-route-time=
+
+Como las clases requisito para =clients= y =routes= ya estan en el sistema, no es necesario volver a crearlas, se crean entonces clases de requerimientos para las restantes necesidades. Para crear una clase requerimiento se utiliza el macro =def-requirement-class= que recibe el nombre =name= del campo requerido y crea una clase =has-name= con un campo =name=.
+
+es decir se crean las clases:
+
+#+BEGIN_SRC lisp +n -rt :results none :exports code
+
+    (def-requirement-class service-time)
+
+    (def-requirement-class time-window) 
+
+    (def-requirement-class travel-time)
+
+    (def-requirement-class max-route-time)
+
+#+END_SRC
+
+Esto crea las clases =has-service-time=, =has-time-window=, =has-travel-time= y =has-max-route-time= con el campo  =service-time=, =time-window=, =travel-time= y =max-route-time= respectivamente.
+
+**** Agregar caractersitica a la estrategia de alto nivel
+
+En todas las estrategias de alto nivel que se tengan se debe agregar las caracteristicas nuevas, para que se generen correctamente las soluciones, en dependencia de que caracteristicas se exija que se ejecuten primero que las que deseamos agregar, se puede tener una representacion mas comoda de estas.
+
+Por ejemplo *visitar a los clientes en una ventana de tiempo* es mas facil de representar si ya se tienen creadas las rutas (se visitaron los clientes), y *no exeder el tiempo maximo de una ruta* es mas facil si se visitaron ya a los clientes y si la visita se realizo dentro de su ventana de tiempo.
+
+Como la unica estrategia de alto nivel presente por el momento en el sistema es =basic-strategy=, entonces basta con agregar las siguientes realciones:
+
+    #+BEGIN_SRC lisp +n -r :results none :exports code 
+
+      (let* ((prerequisites '((visit-client-on-time-window visit-client-at-most-once begin-in-depot)
+			      (dont-exceed-max-route-time visit-client-on-time-window visit-each-client-at-least-once begin-in-depot end-in-depot)))
+
+	     (has-x '((visit-client-on-time-window has-routes has-clients has-time-window has-service-time has-travel-time)
+                      (dont-exceed-max-route-time has-routes has-clients has-service-time has-travel-time has-max-route-time) )))
+
+	(eval `(def-high-level-strategy basic-strategy ,prerequisites ,has-x)))
+
+  #+END_SRC
+
+**** Generar solucion a partir de la caracteristica
+
+Es necesario para cada caracteristica que se agregue y para su opuesto, tener un metodo =after= del =generate-solution-by-condition= que incorpore la caracteristica a la pareja =problema-solucion= que se esta creando.
+
+Para ell se especializa el parametro =characteristic= del metodo =generate-solution-by-condition= como la caracteristica que se esta implementando.
+
+***** visit-client-on-time-window
+
+#+BEGIN_SRC lisp +n -rt :results none :exports code
+
+  (defmethod generate-solution-by-condition :after ((characteristic visit-client-on-time-window)
+						   (high-level-strategy basic-strategy)
+						  problem-solution stream)
+
+      (format stream "IN visit-client-on-time-window~%")
+
+      (if (not (routes problem-solution))
+	  (generate-solution-by-condition (make-instance 'visit-each-client-at-least-once) high-level-strategy problem-solution stream))
+
+      (setf (service-time problem-solution) (loop for i in (clients problem-solution) collecting (random 100 1)))
+      (setf (service-time problem-solution) (push 0 (service-time problem-solution)))
+      (format stream "Service time: ~a~%" (service-time problem-solution))
+
+    (let ((n (+ 2 (length (clients problem-solution))))
+	  (routes (routes problem-solution)))
+
+      (setf (travel-time problem-solution) (make-array (list n n)))
+      (loop for i from 0 to (1- n)
+	    do (loop for j from i to (1- n)
+		    do (if (eq i j) (setf (aref (travel-time problem-solution) i j) 0)
+			   (setf (aref (travel-time problem-solution) i j) (random 100 1)))
+
+			   (setf (aref (travel-time problem-solution) j i) (aref (travel-time problem-solution) i j))
+		     ))
+      (format stream "Travel time: ~a~%" (travel-time problem-solution))
+
+      (setf (time-window problem-solution) (make-array (list n) :initial-contents (loop for i from 1 to n collect (cons -1 0))))
+
+       (loop for r in routes
+	    do (let ((time 0)
+		     (tw (time-window problem-solution)))
+		  (loop for i in r
+			for j in (cdr r)
+			do (setf time (+ time (aref (travel-time problem-solution) i j)))
+
+			   (if (eq (car (aref tw j)) -1) 
+					  (setf (aref tw j) (cons (max (random time (- time 15)) 0)
+								  (random time (+ time 15))))
+
+					  (setf (aref tw j) (cons (max (min (random time (- time 15))
+							      (car (aref tw j)))
+								       0)
+							      (max (random time (+ time 15))
+							      (cdr (aref tw j))))))
+
+
+		   (setf time (+ time (nth j (service-time problem-solution)))))
+		 (if (eq (car (aref tw (car r))) -1)
+			  (setf (aref tw (car r)) (cons 0 15))
+			  (setf (aref tw (car r)) (cons 0 (cdr (aref tw (car r)))))))))
+
+    (format stream "window: ~a~%" (time-window problem-solution)))
+
+
+#+END_SRC
+
+****** TEST
+
+#+BEGIN_SRC lisp :results output
+  (progn
+
+   (defclass test-description (visit-client-on-time-window) ())
+
+   (defclass test-ps (has-clients has-routes has-time-window has-service-time has-travel-time) ())
+
+  (Generate-solution-by-condition (make-instance 'test-description) (make-instance 'basic-strategy) (make-instance 'test-ps) t))
+
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+IN Main method
+IN visit-client-on-time-window
+IN Main method
+IN visit-each-client-at-least-once
+clients: (1 2 3 4)
+routes: ((1 3) (4 2))
+Service time: (0 31 79 6 95)
+Travel time: #2A((0 46 93 22 1 19)
+                 (46 0 43 61 42 42)
+                 (93 43 0 16 18 42)
+                 (22 61 16 0 93 76)
+                 (1 42 18 93 0 71)
+                 (19 42 42 76 71 0))
+window: #((-1 . 0) (0 . 15) (6 . 19) (50 . 68) (0 . 15) (-1 . 0))
+#+end_example
+
+***** visit-client-out-time-window
+
+#+BEGIN_SRC lisp +n -rt :results none :exports code
+
+    (defmethod generate-solution-by-condition :after ((characteristic visit-client-out-time-window)
+						     (high-level-strategy basic-strategy)
+						    problem-solution stream)
+
+	(format stream "IN visit-client-out-time-window~%")
+
+	(generate-solution-by-condition (make-instance 'visit-client-on-time-window) high-level-strategy problem-solution stream)
+
+       (let ((n (random (length (clients problem-solution)) 1))
+	     (type-change (random 1))
+	     (tw (time-window problem-solution)))
+
+	 (if (eq type-change 0)
+		 (setf (aref tw n) (cons (1+ (cdr (aref tw n)))  (random (1+ (cdr (aref tw n))) (+ (cdr (aref tw n)) 15))))
+		 (setf (aref tw n) (cons  (random (1- (cdr (aref tw n))) (- (car (aref tw n)) 15))  (1- (car (aref tw n)))))
+		 )
+	   
+	  (format stream "Client window changed: ~a~%" n)
+	 )
+
+      (format stream "new window: ~a~%" (time-window problem-solution))
+
+      )
+
+
+#+END_SRC
+
+****** TEST
+
+#+BEGIN_SRC lisp :results output
+  (progn
+
+   (defclass test-description (visit-client-out-time-window) ())
+
+   (defclass test-ps (has-clients has-routes has-time-window has-service-time has-travel-time) ())
+
+  (Generate-solution-by-condition (make-instance 'test-description) (make-instance 'basic-strategy) (make-instance 'test-ps) t))
+
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+IN Main method
+IN visit-client-out-time-window
+IN Main method
+IN visit-client-on-time-window
+IN Main method
+IN visit-each-client-at-least-once
+clients: (1 2 3 4)
+routes: ((3 4) (2 1))
+Service time: (0 91 41 57 69)
+Travel time: #2A((0 19 68 27 80 60)
+                 (19 0 64 97 50 29)
+                 (68 64 0 40 44 30)
+                 (27 97 40 0 84 85)
+                 (80 50 44 84 0 87)
+                 (60 29 30 85 87 0))
+window: #((-1 . 0) (50 . 75) (0 . 15) (0 . 15) (73 . 85) (-1 . 0))
+Client window changed: 2
+new window: #((-1 . 0) (50 . 75) (16 . 27) (0 . 15) (73 . 85) (-1 . 0))
+#+end_example
+
+***** dont-exceed-max-route-time
+
+#+BEGIN_SRC lisp +n -rt :results none :exports code
+
+     (defmethod generate-solution-by-condition :after ((characteristic dont-exceed-max-route-time)
+						      (high-level-strategy basic-strategy)
+						     problem-solution stream)
+
+	 (format stream "IN dont-exceed-max-route-time~%")
+
+	 (if (not (routes problem-solution))
+	     (generate-solution-by-condition (make-instance 'visit-each-client-at-least-once) high-level-strategy problem-solution stream))
+
+	(if (not (service-time problem-solution))
+	    (progn (setf (service-time problem-solution) (loop for i in (clients problem-solution) collecting (random 100 1)))
+		   (setf (service-time problem-solution) (push 0 (service-time problem-solution)))
+		   (format stream "Service time: ~a~%" (service-time problem-solution))
+
+		   (let ((n (+ 2 (length (clients problem-solution)))))
+
+			     (setf (travel-time problem-solution) (make-array (list n n)))
+			     (loop for i from 0 to (1- n)
+					    do (loop for j from i to (1- n)
+						do (if (eq i j)
+							(setf (aref (travel-time problem-solution) i j) 0)
+							(setf (aref (travel-time problem-solution) i j) (random 100 1)))
+						   (setf (aref (travel-time problem-solution) j i) (aref (travel-time problem-solution) i j))))
+			     (format stream "Travel time: ~a~%" (travel-time problem-solution)))))
+
+       (let* ((max-time (loop for r in (routes problem-solution)
+				    maximize (+ (loop for i in r
+					     for j in (cdr r)
+					     sum (+ (aref (travel-time problem-solution) i j) (nth j (service-time problem-solution))))
+					  (nth (car r) (service-time problem-solution)) 
+
+				     ))))
+			  (format stream "MAX ROUTE TIME: ~a~%"  max-time)
+			  (setf (max-route-time problem-solution) (random max-time (+ max-time 15))))
+       (format stream "Max time: ~a~%" (max-route-time problem-solution) ) 
+		       )
+
+
+#+END_SRC
+
+****** TEST
+
+#+BEGIN_SRC lisp :results output
+  (progn
+
+   (defclass test-description (dont-exceed-max-route-time) ())
+
+   (defclass test-ps (has-clients has-routes has-max-route-time has-service-time has-travel-time) ())
+
+  (Generate-solution-by-condition (make-instance 'test-description) (make-instance 'basic-strategy) (make-instance 'test-ps) t))
+
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+IN Main method
+IN dont-exceed-max-rout-time
+IN Main method
+IN visit-each-client-at-least-once
+clients: (1 2 3 4)
+routes: ((2 4 1 3))
+Service time: (0 81 29 35 83)
+Travel time: #2A((0 45 43 36 52 61)
+                 (45 0 42 78 96 48)
+                 (43 42 0 72 65 24)
+                 (36 78 72 0 78 26)
+                 (52 96 65 78 0 6)
+                 (61 48 24 26 6 0))
+MAX ROUTE TIME: 467
+Max time: 470
+#+end_example
+
+***** exceed-max-route-time
+#+BEGIN_SRC lisp +n -rt :results none :exports code
+
+      (defmethod generate-solution-by-condition :after ((characteristic exceed-max-route-time)
+						       (high-level-strategy basic-strategy)
+						      problem-solution stream)
+
+	  (format stream "IN exceed-max-rout-time~%")
+          (generate-solution-by-condition (make-instance 'dont-exceed-max-route-time) high-level-strategy problem-solution stream)
+          (setf (max-route-time problem-solution) (- (max-route-time problem-solution) 15))
+	
+	(format stream "new max time: ~a~%" (max-route-time problem-solution) ))
+
+
+#+END_SRC
+
+****** TEST
+
+#+BEGIN_SRC lisp :results output
+  (progn
+
+   (defclass test-description (exceed-max-rout-time) ())
+
+   (defclass test-ps (has-clients has-routes has-max-route-time has-service-time has-travel-time) ())
+
+  (Generate-solution-by-condition (make-instance 'test-description) (make-instance 'basic-strategy) (make-instance 'test-ps) t))
+
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+IN Main method
+IN exceed-max-rout-time
+IN Main method
+IN dont-exceed-max-route-time
+IN Main method
+IN visit-each-client-at-least-once
+clients: (1 2 3 4 5 6 7 8 9 10)
+routes: ((6 3 2 8) (5) (7) (9) (4) (10) (1))
+Service time: (0 33 41 68 26 56 73 37 3 90 66)
+Travel time: #2A((0 91 20 27 29 22 73 85 22 17 98 82)
+                 (91 0 42 52 10 20 58 84 94 49 52 85)
+                 (20 42 0 26 94 75 16 78 29 98 45 42)
+                 (27 52 26 0 86 61 78 94 97 74 61 83)
+                 (29 10 94 86 0 55 22 62 32 49 48 55)
+                 (22 20 75 61 55 0 48 17 21 34 71 39)
+                 (73 58 16 78 22 48 0 62 84 12 16 59)
+                 (85 84 78 94 62 17 62 0 65 30 97 64)
+                 (22 94 29 97 32 21 84 65 0 16 49 88)
+                 (17 49 98 74 49 34 12 30 16 0 61 61)
+                 (98 52 45 61 48 71 16 97 49 61 0 45)
+                 (82 85 42 83 55 39 59 64 88 61 45 0))
+MAX ROUTE TIME: 318
+Max time: 322
+new max time: 307
+#+end_example
+
+**** Descripcion de VRPTW mediante caracteristicas
+
+Utilizando las nuevas caractersticas incorporadas al sistema se puede tener la descripcion del VRPWT
+
+  #+begin_src lisp :results value
+    (def-vrp-description vrptw-description (visit-each-client-at-least-once
+					   dont-overload-vehicle
+					   visit-client-at-most-once
+					   begin-in-depot					
+					   end-in-depot
+					   visit-client-on-time-window
+					   dont-exceed-max-route-time
+					   ))
+  #+end_src
+
+  #+RESULTS:
+  : #<STANDARD-METHOD VRP::GET-DESCRIPTION-ELEMENTS ((EQL VRPTW-DESCRIPTION)) {1004C3C1A3}>
+
+*** Agregar variable, parametro o conjunto
+**** Descripcion
+
+Para poder validar modelos que tengan nuevos significados para las variables, conjuntos y parametros, se permite definir el significados de estos como clases en el sistema.
+
+**** Clase variable parametro o conjunto
+***** Modelo de VRPTW
+
+Para representar el modelo, primero se debe cambiar al paquete =lmml=
+
+ #+begin_src lisp :results value
+         (in-package :lmml)
+ #+end_src
+
+ Un modelo para =VRPTW= mediante flujo de vehiculos de 3 indices polinomial se veria:
+
+   #+BEGIN_SRC lisp :results value
+     (problem vrptw-model "VRPTW 3-index polinomial Vehicle Flow"
+	      (set V)
+	      (set I)
+	      (set K)
+
+	      (parameter cost :domain {V V})
+	      (parameter TT :domain {V V})
+	      (parameter d :domain {V})
+	      (parameter s :domain {V})
+	      (parameter ai :domain {V})
+	      (parameter bi :domain {V})
+	      (parameter MT)
+	      (parameter P)
+	      
+	      (variable-declaration x :domain {V V K} :var-type binary-variable)
+	      (variable-declaration y :domain {V K} :var-type binary-variable)
+	      (variable-declaration u :domain {V K})
+	      (variable-declaration w :domain {V K})
+
+	      (minimize "obj" (sumf ((a in V))  (sumf ((b in V)) (sumf ((c in K)) (* [x a b c] [cost a b])))))
+
+	      (constraint "r1" (= (sumf ((c in K)) [y a c] ) 1)
+						    :quantifiers ((for-all-quantifier a I)))
+	      (constraint "r2" (= 1 [y 0 c]) :quantifiers ((for-all-quantifier c K)))
+
+	      (constraint "r3" (= (sumf ((a in V)) [x b a c]) [y b c]) :quantifiers ((for-all-quantifier b I)
+										     (for-all-quantifier c K)))
+
+	     (constraint "r4" (= (sumf ((a in V)) [x a b c]) [y b c]) :quantifiers ((for-all-quantifier b I)
+										    (for-all-quantifier c K)))
+
+	     (constraint "r5" (>= [u b c] (- (+ [u a c] (* [d b] [x a b c])) (* P (- 1 [x a b c]))))
+								       :quantifiers ((for-all-quantifier a I)
+										     (for-all-quantifier b I)
+										     (for-all-quantifier c K)))
+
+	     (constraint "r6" (<= (* [d a] [y a c]) [u a c]) :quantifiers ((for-all-quantifier a I)
+									  (for-all-quantifier c K)))
+
+	     (constraint "r7" (<= [u a c] (* P [y a c])) :quantifiers ((for-all-quantifier a I)
+								      (for-all-quantifier c K)))
+
+	     (constraint "r8" (>= [w b c] (- (+ (* (+ [s a] [TT a b]) [x a b c]) [w a c]) (* MT (- 1 [x a b c]))))
+								       :quantifiers ((for-all-quantifier a I)
+										     (for-all-quantifier b I)
+										     (for-all-quantifier c K)))
+
+	     (constraint "r9" (<= (*[ai a] [y a c]) [w a c]) :quantifiers ((for-all-quantifier a I)
+									  (for-all-quantifier c K)))
+
+	     (constraint "r10" (<= [w a c] (*[bi a] [y a c])) :quantifiers ((for-all-quantifier a I)
+									      (for-all-quantifier c K)))
+
+
+	     )
+
+  #+END_SRC
+
+  #+RESULTS:
+  : VRPTW-MODEL
+
+ Para ver el modelo en GMLP basta con ejecutar:
+ 
+       #+begin_src lisp :results output
+	 (format t "~a~%" (generate-code vrptw-model gmpl t))
+       #+end_src
+
+       #+RESULTS:
+       #+begin_example
+       /*Problem VRPTW 3-index polinomial Vehicle Flow*/
+
+
+       set V;
+
+       set I;
+
+       set K;
+
+       param COST {i in V, j in V};
+
+       param TT {i in V, j in V};
+
+       param D {i in V};
+
+       param S {i in V};
+
+       param AI {i in V};
+
+       param BI {i in V};
+
+       param MT;
+
+       param P;
+
+       var X {i in V, j in V, k in K}, binary, >= 0;
+
+       var Y {i in V, j in K}, binary, >= 0;
+
+       var U {i in V, j in K}, >= 0;
+
+       var W {i in V, j in K}, >= 0;
+
+       minimize obj: sum {A in V} sum {B in V} sum {C in K} X[A, B, C]*COST[A, B];
+
+       s.t. r1 {A in I}: sum {C in K} Y[A, C] = 1;
+
+       s.t. r2 {C in K}: 1 = Y[0, C];
+
+       s.t. r3 {B in I, C in K}: sum {A in V} X[B, A, C] = Y[B, C];
+
+       s.t. r4 {B in I, C in K}: sum {A in V} X[A, B, C] = Y[B, C];
+
+       s.t. r5 {A in I, B in I, C in K}: U[B, C] >= U[A, C] + D[B]*X[A, B, C] - P*(1 - X[A, B, C]);
+
+       s.t. r6 {A in I, C in K}: D[A]*Y[A, C] <= U[A, C];
+
+       s.t. r7 {A in I, C in K}: U[A, C] <= P*Y[A, C];
+
+       s.t. r8 {A in I, B in I, C in K}: W[B, C] >= (S[A] + TT[A, B])*X[A, B, C] + W[A, C] - MT*(1 - X[A, B, C]);
+
+       s.t. r9 {A in I, C in K}: AI[A]*Y[A, C] <= W[A, C];
+
+       s.t. r10 {A in I, C in K}: W[A, C] <= BI[A]*Y[A, C];
+
+       end;
+       NIL
+       #+end_example
+
+***** definir parametros, variables y conjuntos para VRPTW
+
+En este modelo, aparecen variables, parametros y conjuntos, con significados que forman parte del sistema, como:
+=V= (conjunto de clientes + deposito)
+=I= (conjunto de clientes)
+=d= (demanda de cada cliente i)
+=P= (capacidad de los vehiculos en flota heterogenea)
+=Knum= (cantidad de vehiculos)
+
+
+para estos se tienen en el sistema clases ya definidas de modo que se puedan extraer de una solucion de alto nivel la informacion necesaria para asignarle valores a estas variables, parametros y conjuntos.
+
+Sin embargo para otros como:
+=K= (conjunto de vehiculos)
+=s= (tiempo de servicio en el cliente i)
+=ai= (limite inferior de la ventana de tiempo para el cliente i)
+=bi= (limite superior de la ventana de tiempo para el cliente i)
+=TT= (tiempo de viaje de i a j)
+=TW= (tiempo maximo de ruta)
+=x= (vehiculo k va del cliente i al j)
+=y= (el vehiculo k visita al cliente i)
+=u= (carga del vehiculo k luego de visitar al cliente i)
+=w= (tiempo en que el vehiculo k inicia el servicio en el cliente i)
+
+Entonces, para todos los nuevos significados es necesario crear una clase en lisp, para ello se utiliza el macro =def-variable-parameter= que recibe el nombre con el que se crea la clase que identifica el significado y como se llama el campo en que se guardaran los valores que tome esa variable, parametro o conjunto.
+
+Ese macro genera automaticamente el metodo =get-slot= para cada signigicado de variable, este metodo se utiliza en el funcionamiento interno del sistema; su utilidad es para que independientemente del simbolo que usemos en el modelo para una variables, parametro o conjunto, si le asociamos el mismo significado, saber cual es el nombre del campo asociado a la solucion de bajo nivel que tenemos que pedir.
+
+Primero hay que campiar al paquete =vrp=
+
+ #+begin_src lisp :results value
+         (in-package :vrp)
+ #+end_src
+
+ y crear los nuevos significados con el macro:
+ 
+  #+begin_src lisp :results value
+    (def-variable-parameter travel-time-i-j t-ij)
+    (def-variable-parameter service-time-i s-i)
+    (def-variable-parameter lower-bound-window-i a-i)
+    (def-variable-parameter upper-bound-window-i b-i)
+    (def-variable-parameter max-route-time MT)
+    (def-variable-parameter vehicle-set k-set)
+    (def-variable-parameter vehicle-k-visit-client-i y-ik)
+    (def-variable-parameter vehicle-k-starts-service-on-client-i w-ik)
+    (def-variable-parameter vehicle-k-capacity-after-client-i u-ik)
+    (def-variable-parameter vehicle-k-goes-from-i-to-j x-ijk)
+
+ #+end_src
+
+ #+RESULTS:
+ : #<STANDARD-METHOD VRP::GET-SLOT ((EQL VEHICLE-K-GOES-FROM-I-TO-J)) {1003B72333}>
+ 
+**** Pasar de solucion a variables, parametros o conjuntos
+***** Descripcion
+
+Para cada una de los clases creadas para los nuevos significados, setien que definir como obtienen sus valores dada una solucion de alto nivel. Para esto se implementa para cada una el metodo =after= de la funcion generica =from-high-to-low=
+
+***** travel-time-i-j
+
+#+BEGIN_SRC lisp +n -r :results none :exports code
+
+    (defmethod from-high-to-low :after (problem-solution  
+				       (variable-parameter travel-time-i-j)
+				       stream) 
+	   (format stream "IN travel-time-i-j ~%")
+	   (setf (t-ij variable-parameter) (travel-time problem-solution))
+	   (format stream "t-ij: ~a~%" (t-ij variable-parameter))
+       )
+
+#+END_SRC
+****** TEST
+
+#+BEGIN_SRC lisp :results output
+  (progn
+
+   (defclass test-description (visit-client-on-time-window) ())
+
+   (defclass test-ps (has-clients has-routes has-travel-time has-time-window has-service-time) ())
+
+   (let* ((problem-sol (make-instance 'test-ps)))
+	  (Generate-solution-by-condition (make-instance 'test-description) (make-instance 'basic-strategy) problem-sol t)
+
+     (format t "~%Solucion de bajo nivel ~%")
+      (from-high-to-low problem-sol (make-instance 'travel-time-i-j) t)
+     ))
+
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+IN Main method
+IN visit-client-on-time-window
+IN Main method
+IN visit-each-client-at-least-once
+clients: (1 2 3)
+routes: ((2 3 1))
+Service time: (0 44 68 61)
+Travel time: #2A((0 5 65 9 64)
+                 (5 0 8 56 28)
+                 (65 8 0 53 61)
+                 (9 56 53 0 17)
+                 (64 28 61 17 0))
+window: #((-1 . 0) (159 . 172) (0 . 15) (43 . 61) (-1 . 0))
+
+Solucion de bajo nivel 
+IN main method
+IN travel-time-i-j 
+t-ij: #2A((0 5 65 9 64)
+          (5 0 8 56 28)
+          (65 8 0 53 61)
+          (9 56 53 0 17)
+          (64 28 61 17 0))
+#+end_example
+
+***** service-time-i
+
+#+BEGIN_SRC lisp +n -r :results none :exports code
+
+	(defmethod from-high-to-low :after (problem-solution  
+					   (variable-parameter service-time-i)
+					   stream) 
+	       (format stream "IN service-time-i ~%")
+	       (setf (s-i variable-parameter) (make-array (list (1+ (length (clients problem-solution))))
+							   :initial-contents (loop for s in (service-time problem-solution)
+										  collect s )))
+	       (format stream "s-i: ~a~%" (s-i variable-parameter)))
+
+#+END_SRC
+
+****** TEST
+
+#+BEGIN_SRC lisp :results output
+  (progn
+
+   (defclass test-description (visit-client-on-time-window) ())
+
+   (defclass test-ps (has-clients has-routes has-travel-time has-time-window has-service-time) ())
+
+   (let* ((problem-sol (make-instance 'test-ps)))
+	  (Generate-solution-by-condition (make-instance 'test-description) (make-instance 'basic-strategy) problem-sol t)
+
+     (format t "~%Solucion de bajo nivel ~%")
+      (from-high-to-low problem-sol (make-instance 'service-time-i) t)
+     ))
+
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+IN Main method
+IN visit-client-on-time-window
+IN Main method
+IN visit-each-client-at-least-once
+clients: (1 2 3 4 5)
+routes: ((4 2 3 1) (5))
+Service time: (0 76 75 3 28 81)
+Travel time: #2A((0 52 82 14 5 31 60)
+                 (52 0 68 94 16 9 22)
+                 (82 68 0 18 47 62 7)
+                 (14 94 18 0 6 58 9)
+                 (5 16 47 6 0 42 74)
+                 (31 9 62 58 42 0 74)
+                 (60 22 7 9 74 74 0))
+window: #((-1 . 0) (223 . 248) (37 . 52) (132 . 149) (0 . 15) (0 . 15) (-1 . 0))
+
+Solucion de bajo nivel 
+IN main method
+IN service-time-i 
+s-i: #(0 76 75 3 28 81)
+#+end_example
+
+***** lower-bound-window-i
+
+#+BEGIN_SRC lisp +n -r :results none :exports code
+
+  (defmethod from-high-to-low :after (problem-solution  
+				     (variable-parameter lower-bound-window-i)
+				     stream) 
+	 (format stream "IN lower-bound-window-i ~%")
+	 (setf (a-i variable-parameter) (make-array (list (1+ (length (clients problem-solution))))
+						     :initial-contents (loop for s across (time-window problem-solution)
+									     for i from 0 to (length (clients problem-solution))
+									        collect (car s))))
+	 (format stream "a-i: ~a~%" (a-i variable-parameter)))
+
+#+END_SRC
+
+****** TEST
+
+#+BEGIN_SRC lisp :results output
+  (progn
+
+   (defclass test-description (visit-client-on-time-window) ())
+
+   (defclass test-ps (has-clients has-routes has-travel-time has-time-window has-service-time) ())
+
+   (let* ((problem-sol (make-instance 'test-ps)))
+	  (Generate-solution-by-condition (make-instance 'test-description) (make-instance 'basic-strategy) problem-sol t)
+
+     (format t "~%Solucion de bajo nivel ~%")
+      (from-high-to-low problem-sol (make-instance 'lower-bound-window-i) t)
+     ))
+
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+IN Main method
+IN visit-client-on-time-window
+IN Main method
+IN visit-each-client-at-least-once
+clients: (1 2 3 4 5 6 7 8 9 10 11 12 13)
+routes: ((12 4) (10 6 3 8 11 9 5 13 2 1 7))
+Service time: (0 91 55 59 74 86 70 12 82 37 42 98 88 92)
+Travel time: #2A((0 35 73 77 83 92 1 98 74 78 35 60 44 88 13)
+                 (35 0 72 22 71 25 43 35 13 51 48 70 62 35 21)
+                 (73 72 0 15 35 81 5 46 82 81 45 44 10 73 67)
+                 (77 22 15 0 55 52 3 75 18 9 75 7 88 39 55)
+                 (83 71 35 55 0 94 48 11 52 81 10 12 68 90 84)
+                 (92 25 81 52 94 0 54 14 7 52 64 26 34 68 6)
+                 (1 43 5 3 48 54 0 12 29 90 91 90 44 32 91)
+                 (98 35 46 75 11 14 12 0 5 11 77 19 54 66 45)
+                 (74 13 82 18 52 7 29 5 0 52 20 63 12 89 39)
+                 (78 51 81 9 81 52 90 11 52 0 4 64 16 70 94)
+                 (35 48 45 75 10 64 91 77 20 4 0 9 56 66 43)
+                 (60 70 44 7 12 26 90 19 63 64 9 0 96 6 50)
+                 (44 62 10 88 68 34 44 54 12 16 56 96 0 26 5)
+                 (88 35 73 39 90 68 32 66 89 70 66 6 26 0 79)
+                 (13 21 67 55 84 6 91 45 39 94 43 50 5 79 0))
+window: #((-1 . 0) (1074 . 1084) (948 . 967) (154 . 177) (66 . 80) (630 . 647)
+          (89 . 97) (1199 . 1215) (238 . 249) (537 . 549) (0 . 15) (375 . 387)
+          (0 . 15) (776 . 802) (-1 . 0))
+
+Solucion de bajo nivel 
+IN main method
+IN lower-bound-window-i 
+a-i: #(-1 1074 948 154 66 630 89 1199 238 537 0 375 0 776)
+#+end_example
+
+***** upper-bound-window-i
+
+#+BEGIN_SRC lisp +n -r :results none :exports code
+
+  (defmethod from-high-to-low :after (problem-solution  
+				     (variable-parameter upper-bound-window-i)
+				     stream) 
+	 (format stream "IN upper-bound-window-i ~%")
+	 (setf (b-i variable-parameter) (make-array (list (1+ (length (clients problem-solution))))
+						     :initial-contents (loop for s across (time-window problem-solution)
+									     for i from 0 to (length (clients problem-solution))
+									        collect (cdr s))))
+	 (format stream "b-i: ~a~%" (b-i variable-parameter)))
+
+#+END_SRC
+
+****** TEST
+
+#+BEGIN_SRC lisp :results output
+  (progn
+
+   (defclass test-description (visit-client-on-time-window) ())
+
+   (defclass test-ps (has-clients has-routes has-travel-time has-time-window has-service-time) ())
+
+   (let* ((problem-sol (make-instance 'test-ps)))
+	  (Generate-solution-by-condition (make-instance 'test-description) (make-instance 'basic-strategy) problem-sol t)
+
+     (format t "~%Solucion de bajo nivel ~%")
+      (from-high-to-low problem-sol (make-instance 'upper-bound-window-i) t)
+     ))
+
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+IN Main method
+IN visit-client-on-time-window
+IN Main method
+IN visit-each-client-at-least-once
+clients: (1 2 3 4 5 6 7)
+routes: ((6) (5 1 4) (3) (2 7))
+Service time: (0 86 97 52 95 65 22 60)
+Travel time: #2A((0 98 81 50 68 78 95 76 91)
+                 (98 0 28 40 35 2 58 73 38)
+                 (81 28 0 55 95 81 72 52 87)
+                 (50 40 55 0 68 88 42 38 91)
+                 (68 35 95 68 0 4 32 28 84)
+                 (78 2 81 88 4 0 35 45 58)
+                 (95 58 72 42 32 35 0 97 55)
+                 (76 73 52 38 28 45 97 0 68)
+                 (91 38 87 91 84 58 55 68 0))
+window: #((-1 . 0) (0 . 11) (0 . 15) (0 . 15) (108 . 127) (0 . 15) (0 . 15)
+          (50 . 59) (-1 . 0))
+
+Solucion de bajo nivel 
+IN main method
+IN upper-bound-window-i 
+b-i: #(0 11 15 15 127 15 15 59)
+#+end_example
+
+***** max-route-time
+
+#+BEGIN_SRC lisp +n -r :results none :exports code
+
+  (defmethod from-high-to-low :after (problem-solution  
+				     (variable-parameter max-route-time)
+				     stream) 
+	 (format stream "IN max-route-time ~%")
+	 (setf (MT variable-parameter) (max-route-time problem-solution))
+	 (format stream "MT: ~a~%" (MT variable-parameter)))
+
+#+END_SRC
+
+****** TEST
+
+#+BEGIN_SRC lisp :results output
+  (progn
+
+   (defclass test-description (dont-exceed-max-route-time) ())
+
+   (defclass test-ps (has-clients has-routes has-travel-time has-max-route-time has-service-time) ())
+
+   (let* ((problem-sol (make-instance 'test-ps)))
+	  (Generate-solution-by-condition (make-instance 'test-description) (make-instance 'basic-strategy) problem-sol t)
+
+     (format t "~%Solucion de bajo nivel ~%")
+      (from-high-to-low problem-sol (make-instance 'max-route-time) t)
+     ))
+
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+IN Main method
+IN dont-exceed-max-route-time
+IN Main method
+IN visit-each-client-at-least-once
+clients: (1 2 3 4 5 6 7 8 9 10)
+routes: ((9 3 4 8 2) (5) (10) (6) (1) (7))
+Service time: (0 45 74 26 9 85 37 52 33 56 26)
+Travel time: #2A((0 65 71 29 98 57 42 94 67 49 61 65)
+                 (65 0 58 75 29 28 15 7 75 65 3 92)
+                 (71 58 0 58 28 64 4 29 52 35 3 58)
+                 (29 75 58 0 70 85 67 24 37 22 85 32)
+                 (98 29 28 70 0 88 11 5 44 67 30 97)
+                 (57 28 64 85 88 0 13 51 55 75 32 69)
+                 (42 15 4 67 11 13 0 72 88 28 25 87)
+                 (94 7 29 24 5 51 72 0 34 61 73 69)
+                 (67 75 52 37 44 55 88 34 0 42 23 84)
+                 (49 65 35 22 67 75 28 61 42 0 35 44)
+                 (61 3 3 85 30 32 25 73 23 35 0 79)
+                 (65 92 58 32 97 69 87 69 84 44 79 0))
+MAX ROUTE TIME: 386
+Max time: 393
+
+Solucion de bajo nivel 
+IN main method
+IN max-route-time 
+MT: 393
+#+end_example
+
+***** vehicle-set
+
+#+BEGIN_SRC lisp +n -r :results none :exports code
+
+    (defmethod from-high-to-low :after (problem-solution  
+				       (variable-parameter vehicle-set)
+				       stream) 
+	   (format stream "IN vehicle-set ~%")
+	   (setf (k-set variable-parameter) (loop for i from 0 to (1- (length (routes problem-solution)))
+						  collecting i))
+	   (format stream "k-set: ~a~%" (k-set variable-parameter)))
+
+#+END_SRC
+
+****** TEST
+
+#+BEGIN_SRC lisp :results output
+  (progn
+
+   (defclass test-description (visit-client-on-time-window) ())
+
+   (defclass test-ps (has-clients has-routes has-travel-time has-time-window has-service-time) ())
+
+   (let* ((problem-sol (make-instance 'test-ps)))
+	  (Generate-solution-by-condition (make-instance 'test-description) (make-instance 'basic-strategy) problem-sol t)
+
+     (format t "~%Solucion de bajo nivel ~%")
+      (from-high-to-low problem-sol (make-instance 'vehicle-set) t)
+     ))
+
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+IN Main method
+IN visit-client-on-time-window
+IN Main method
+IN visit-each-client-at-least-once
+clients: (1 2 3 4 5 6 7 8 9 10 11)
+routes: ((6 3 8 11) (4 2) (7) (5) (9) (10) (1))
+Service time: (0 25 32 68 4 57 41 69 56 78 37 69)
+Travel time: #2A((0 48 92 58 18 78 84 21 84 13 60 70 43)
+                 (48 0 40 98 71 59 2 22 35 55 58 23 60)
+                 (92 40 0 52 4 57 39 32 6 78 75 24 16)
+                 (58 98 52 0 47 29 71 30 24 91 53 47 47)
+                 (18 71 4 47 0 14 46 84 29 65 71 38 27)
+                 (78 59 57 29 14 0 4 76 17 25 63 55 85)
+                 (84 2 39 71 46 4 0 17 31 75 19 42 50)
+                 (21 22 32 30 84 76 17 0 9 20 45 89 32)
+                 (84 35 6 24 29 17 31 9 0 3 27 76 49)
+                 (13 55 78 91 65 25 75 20 3 0 3 6 26)
+                 (60 58 75 53 71 63 19 45 27 3 0 43 90)
+                 (70 23 24 47 38 55 42 89 76 6 43 0 44)
+                 (43 60 16 47 27 85 50 32 49 26 90 44 0))
+window: #((-1 . 0) (0 . 15) (0 . 15) (68 . 73) (0 . 15) (0 . 15) (0 . 15)
+          (0 . 15) (156 . 167) (0 . 15) (0 . 15) (291 . 302) (-1 . 0))
+
+Solucion de bajo nivel 
+IN main method
+IN vehicle-set 
+k-set: (0 1 2 3 4 5 6)
+#+end_example
+
+***** vehicle-k-visit-client-i
+
+#+BEGIN_SRC lisp +n -r :results none :exports code
+
+  (defmethod from-high-to-low :after (problem-solution  
+				     (variable-parameter vehicle-k-visit-client-i)
+				     stream)
+    
+	 (format stream "IN vehicle-k-visit-client-i ~%")
+	 (let ((n (+ 2 (length (clients problem-solution))))
+	       (k (length (routes problem-solution))))
+	    (setf (y-ik variable-parameter) (make-array (list n k) :initial-element 0))
+	    (loop for r in (routes problem-solution)
+		  for j from 0 to k
+		  do (loop for i in r
+			   do (setf (aref (y-ik variable-parameter) i j) 1))))
+
+	 (format stream "y-ik: ~a~%" (y-ik variable-parameter)))
+
+#+END_SRC
+
+****** TEST
+
+#+BEGIN_SRC lisp :results output
+  (progn
+
+   (defclass test-description (visit-client-on-time-window) ())
+
+   (defclass test-ps (has-clients has-routes has-travel-time has-time-window has-service-time) ())
+
+   (let* ((problem-sol (make-instance 'test-ps)))
+	  (Generate-solution-by-condition (make-instance 'test-description) (make-instance 'basic-strategy) problem-sol t)
+
+     (format t "~%Solucion de bajo nivel ~%")
+      (from-high-to-low problem-sol (make-instance 'vehicle-k-visit-client-i) t)
+     ))
+
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+IN Main method
+IN visit-client-on-time-window
+IN Main method
+IN visit-each-client-at-least-once
+clients: (1 2 3 4 5 6 7 8 9)
+routes: ((7 4) (1 3) (8) (2 6) (5) (9))
+Service time: (0 58 16 35 6 96 75 70 55 10)
+Travel time: #2A((0 39 42 66 17 48 17 28 28 71 88)
+                 (39 0 69 1 29 9 48 20 17 20 37)
+                 (42 69 0 78 40 1 82 35 81 93 95)
+                 (66 1 78 0 33 5 73 93 67 42 42)
+                 (17 29 40 33 0 76 97 97 32 87 55)
+                 (48 9 1 5 76 0 84 50 97 84 86)
+                 (17 48 82 73 97 84 0 23 8 91 42)
+                 (28 20 35 93 97 50 23 0 58 42 56)
+                 (28 17 81 67 32 97 8 58 0 89 68)
+                 (71 20 93 42 87 84 91 42 89 0 73)
+                 (88 37 95 42 55 86 42 56 68 73 0))
+window: #((-1 . 0) (0 . 15) (0 . 15) (0 . 14) (86 . 100) (0 . 15) (80 . 95)
+          (0 . 15) (0 . 15) (0 . 15) (-1 . 0))
+
+Solucion de bajo nivel 
+IN main method
+IN vehicle-k-visit-client-i 
+y-ik: #2A((0 0 0 0 0 0)
+          (0 1 0 0 0 0)
+          (0 0 0 1 0 0)
+          (0 1 0 0 0 0)
+          (1 0 0 0 0 0)
+          (0 0 0 0 1 0)
+          (0 0 0 1 0 0)
+          (1 0 0 0 0 0)
+          (0 0 1 0 0 0)
+          (0 0 0 0 0 1)
+          (0 0 0 0 0 0))
+#+end_example
+
+***** vehicle-k-starts-service-on-client-i
+
+#+BEGIN_SRC lisp +n -r :results none :exports code
+
+  (defmethod from-high-to-low :after (problem-solution  
+				     (variable-parameter vehicle-k-starts-service-on-client-i)
+				     stream)
+
+	 (format stream "IN vehicle-k-starts-service-on-client-i ~%")
+	 (let ((n (+ 2 (length (clients problem-solution))))
+	       (k (length (routes problem-solution))))
+	    (setf (w-ik variable-parameter) (make-array (list n k) :initial-element 0))
+
+	    (loop for r in (routes problem-solution)
+		  for l from 0 to k
+		  do (let ((temp (nth (car r) (service-time problem-solution))))
+			  (loop for i in r
+			      for j in (cdr r)
+			       do (setf temp (+ temp  (aref (travel-time problem-solution) i j)))
+				  (setf (aref (w-ik variable-parameter) j l) temp)
+				  (setf temp (+ temp (nth j (service-time problem-solution)))))
+			  (setf (aref (w-ik variable-parameter) (car r) l) 0))))
+
+	 (format stream "w-ik: ~a~%" (w-ik variable-parameter)))
+
+#+END_SRC
+
+****** TEST
+
+#+BEGIN_SRC lisp :results output
+  (progn
+
+   (defclass test-description (visit-client-on-time-window) ())
+
+   (defclass test-ps (has-clients has-routes has-travel-time has-time-window has-service-time) ())
+
+   (let* ((problem-sol (make-instance 'test-ps)))
+	  (Generate-solution-by-condition (make-instance 'test-description) (make-instance 'basic-strategy) problem-sol t)
+
+     (format t "~%Solucion de bajo nivel ~%")
+      (from-high-to-low problem-sol (make-instance 'vehicle-k-starts-service-on-client-i) t)
+     ))
+
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+IN Main method
+IN visit-client-on-time-window
+IN Main method
+IN visit-each-client-at-least-once
+clients: (1 2 3 4 5 6 7 8 9 10)
+routes: ((4 9) (10 1 3 2 7 8 6 5))
+Service time: (0 22 59 95 97 90 80 8 8 78 26)
+Travel time: #2A((0 85 71 22 58 33 63 74 40 90 85 46)
+                 (85 0 41 11 44 45 41 55 6 10 65 72)
+                 (71 41 0 34 50 90 88 3 24 65 35 71)
+                 (22 11 34 0 73 2 79 78 22 74 7 91)
+                 (58 44 50 73 0 39 54 12 58 74 30 24)
+                 (33 45 90 2 39 0 18 42 17 88 14 18)
+                 (63 41 88 79 54 18 0 83 41 23 85 41)
+                 (74 55 3 78 12 42 83 0 14 50 7 83)
+                 (40 6 24 22 58 17 41 14 0 61 35 39)
+                 (90 10 65 74 74 88 23 50 61 0 96 91)
+                 (85 65 35 7 30 14 85 7 35 96 0 88)
+                 (46 72 71 91 24 18 41 83 39 91 88 0))
+window: #((-1 . 0) (54 . 66) (224 . 238) (87 . 102) (0 . 15) (446 . 465)
+          (356 . 371) (285 . 293) (306 . 314) (70 . 87) (0 . 15) (-1 . 0))
+
+Solucion de bajo nivel 
+IN main method
+IN vehicle-k-starts-service-on-client-i 
+w-ik: #2A((0 0)
+          (0 91)
+          (0 253)
+          (0 124)
+          (0 0)
+          (0 484)
+          (0 386)
+          (0 315)
+          (0 337)
+          (171 0)
+          (0 0)
+          (0 0))
+#+end_example
+
+***** vehicle-k-capacity-after-client-i
+
+#+BEGIN_SRC lisp +n -r :results none :exports code
+
+  (defmethod from-high-to-low :after (problem-solution  
+				     (variable-parameter vehicle-k-capacity-after-client-i)
+				     stream)
+
+	 (format stream "IN vehicle-k-capacity-after-client-i ~%")
+	 (let ((n (+ 2 (length (clients problem-solution))))
+	       (k (length (routes problem-solution))))
+	    (setf (u-ik variable-parameter) (make-array (list n k) :initial-element 0))
+
+	    (loop for r in (routes problem-solution)
+		  for l from 0 to k
+		  do (let ((temp (loop for r-c in r sum (nth r-c (demand problem-solution)))))
+			  (loop for i in r
+			       do (setf temp (- temp  (nth i (demand problem-solution))))
+				  (setf (aref (u-ik variable-parameter) i l) temp)))))
+
+	 (format stream "u-ik: ~a~%" (u-ik variable-parameter)))
+
+#+END_SRC
+
+****** TEST
+
+#+BEGIN_SRC lisp :results output
+  (progn
+
+   (defclass test-description (dont-overload-vehicle visit-client-on-time-window) ())
+
+   (defclass test-ps (has-clients has-routes has-capacity has-demand has-travel-time has-time-window has-service-time) ())
+
+   (let* ((problem-sol (make-instance 'test-ps)))
+	  (Generate-solution-by-condition (make-instance 'test-description) (make-instance 'basic-strategy) problem-sol t)
+
+     (format t "~%Solucion de bajo nivel ~%")
+      (from-high-to-low problem-sol (make-instance 'vehicle-k-capacity-after-client-i) t)
+     ))
+
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+IN Main method
+IN visit-client-on-time-window
+IN Main method
+IN visit-each-client-at-least-once
+clients: (1 2 3 4)
+routes: ((3 1 4 2))
+Service time: (0 68 91 13 48)
+Travel time: #2A((0 71 39 78 93 86)
+                 (71 0 48 52 13 18)
+                 (39 48 0 18 69 48)
+                 (78 52 18 0 80 86)
+                 (93 13 69 80 0 39)
+                 (86 18 48 86 39 0))
+window: #((-1 . 0) (50 . 56) (238 . 251) (0 . 15) (122 . 139) (-1 . 0))
+IN dont-overload-vehicle
+demands: (0 92 32 39 31)
+values: (194)
+max value: 194
+capacity: 205
+
+Solucion de bajo nivel 
+IN main method
+IN vehicle-k-capacity-after-client-i 
+u-ik: #2A((0) (63) (0) (155) (32) (0))
+#+end_example
+
+***** vehicle-k-goes-from-i-to-j
+
+#+BEGIN_SRC lisp +n -r :results none :exports code
+
+  (defmethod from-high-to-low :after (problem-solution  
+				     (variable-parameter vehicle-k-goes-from-i-to-j)
+				     stream)
+
+	 (format stream "IN vehicle-k-goes-from-i-to-j ~%")
+	 (let ((n (+ 2 (length (clients problem-solution))))
+	       (k (length (routes problem-solution))))
+	    (setf (x-ijk variable-parameter) (make-array (list n n k) :initial-element 0))
+
+	    (loop for r in (routes problem-solution)
+		  for l from 0 to k
+		  do  (loop for i in r
+			    for j in (cdr r)
+			       do (setf (aref (x-ijk variable-parameter) i j l) 1))))
+
+	 (format stream "x-ijk: ~a~%" (x-ijk variable-parameter)))
+
+#+END_SRC
+
+****** TEST
+
+#+BEGIN_SRC lisp :results output
+  (progn
+
+   (defclass test-description (visit-client-on-time-window) ())
+
+   (defclass test-ps (has-clients has-routes has-travel-time has-time-window has-service-time) ())
+
+   (let* ((problem-sol (make-instance 'test-ps)))
+	  (Generate-solution-by-condition (make-instance 'test-description) (make-instance 'basic-strategy) problem-sol t)
+
+     (format t "~%Solucion de bajo nivel ~%")
+      (from-high-to-low problem-sol (make-instance 'vehicle-k-goes-from-i-to-j) t)
+     ))
+
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+IN Main method
+IN visit-client-on-time-window
+IN Main method
+IN visit-each-client-at-least-once
+clients: (1 2 3 4 5 6)
+routes: ((2 3 4) (5 1 6))
+Service time: (0 30 49 71 71 97 53)
+Travel time: #2A((0 25 32 54 63 9 6 6)
+                 (25 0 77 95 36 96 44 78)
+                 (32 77 0 3 75 29 78 16)
+                 (54 95 3 0 10 15 25 48)
+                 (63 36 75 10 0 90 42 37)
+                 (9 96 29 15 90 0 88 54)
+                 (6 44 78 25 42 88 0 94)
+                 (6 78 16 48 37 54 94 0))
+window: #((-1 . 0) (83 . 100) (0 . 15) (1 . 3) (81 . 95) (0 . 15) (166 . 181)
+          (-1 . 0))
+
+Solucion de bajo nivel 
+IN main method
+IN vehicle-k-goes-from-i-to-j 
+x-ijk: #3A(((0 0) (0 0) (0 0) (0 0) (0 0) (0 0) (0 0) (0 0))
+           ((0 0) (0 0) (0 0) (0 0) (0 0) (0 0) (0 1) (0 0))
+           ((0 0) (0 0) (0 0) (1 0) (0 0) (0 0) (0 0) (0 0))
+           ((0 0) (0 0) (0 0) (0 0) (1 0) (0 0) (0 0) (0 0))
+           ((0 0) (0 0) (0 0) (0 0) (0 0) (0 0) (0 0) (0 0))
+           ((0 0) (0 1) (0 0) (0 0) (0 0) (0 0) (0 0) (0 0))
+           ((0 0) (0 0) (0 0) (0 0) (0 0) (0 0) (0 0) (0 0))
+           ((0 0) (0 0) (0 0) (0 0) (0 0) (0 0) (0 0) (0 0)))
+#+end_example
+
+**** Declarar significado de variables, parametros y conjuntos del modelo VRPTW
+
+  #+begin_src lisp :results value
+	    (defparameter param-variable-set-meaning-for-vrptw (list (cons 'V 'client-depot-set)
+							   (cons 'I 'client-set)
+							   (cons 'd 'demand-each-client)
+							   (cons 'TT 'travel-time-i-j)
+							   (cons 'MT 'max-route-time)
+							   (cons 's 'service-time-i)
+							   (cons 'ai 'lower-bound-window-i)
+							   (cons 'bi 'upper-bound-window-i)
+							   (cons 'P 'capacity-vehicles)
+							   (cons 'K 'vehicle-set)
+							   (cons 'x 'vehicle-k-goes-from-i-to-j)
+							   (cons 'y 'vehicle-k-visit-client-i)
+							   (cons 'u 'vehicle-k-capacity-after-client-i)
+							   (cons 'w 'vehicle-k-starts-service-on-client-i)))
+  #+end_src
+
+  #+RESULTS:
+  : PARAM-VARIABLE-SET-MEANING-FOR-VRPTW
+
+**** Validar modelo VRPTW
+
+#+BEGIN_SRC lisp :results output
+  (bformat t "MODELO VRPTW")
+  (model-evaluator lmml::vrptw-model param-variable-set-meaning-for-vrptw
+		   'vrptw-description 'basic-strategy "vrptw-output.txt" 1000)
+
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+==============
+ MODELO VRPTW
+==============
+
+[TEST: 1] FAILED
+[TEST: 2] PASSED
+[TEST: 3] PASSED
+[TEST: 4] PASSED
+[TEST: 5] PASSED
+[TEST: 6] PASSED
+[TEST: 7] PASSED
+[TEST: 8] PASSED
+[TEST: 9] PASSED
+[TEST: 10] PASSED
+[TEST: 11] PASSED
+[TEST: 12] PASSED
+[TEST: 13] PASSED
+[TEST: 14] PASSED
+[TEST: 15] PASSED
+[TEST: 16] PASSED
+[TEST: 17] PASSED
+[TEST: 18] PASSED
+[TEST: 19] PASSED
+[TEST: 20] PASSED
+[TEST: 21] PASSED
+[TEST: 22] PASSED
+[TEST: 23] PASSED
+[TEST: 24] PASSED
+[TEST: 25] PASSED
+[TEST: 26] PASSED
+[TEST: 27] PASSED
+[TEST: 28] PASSED
+[TEST: 29] PASSED
+[TEST: 30] PASSED
+[TEST: 31] PASSED
+[TEST: 32] PASSED
+[TEST: 33] PASSED
+[TEST: 34] PASSED
+[TEST: 35] PASSED
+[TEST: 36] PASSED
+[TEST: 37] PASSED
+[TEST: 38] PASSED
+[TEST: 39] PASSED
+[TEST: 40] PASSED
+[TEST: 41] PASSED
+[TEST: 42] PASSED
+[TEST: 43] PASSED
+[TEST: 44] PASSED
+[TEST: 45] PASSED
+[TEST: 46] PASSED
+[TEST: 47] PASSED
+[TEST: 48] PASSED
+[TEST: 49] PASSED
+[TEST: 50] PASSED
+[TEST: 51] PASSED
+[TEST: 52] PASSED
+[TEST: 53] PASSED
+[TEST: 54] PASSED
+[TEST: 55] PASSED
+[TEST: 56] PASSED
+[TEST: 57] PASSED
+[TEST: 58] PASSED
+[TEST: 59] PASSED
+[TEST: 60] PASSED
+[TEST: 61] PASSED
+[TEST: 62] PASSED
+[TEST: 63] PASSED
+[TEST: 64] PASSED
+[TEST: 65] PASSED
+[TEST: 66] PASSED
+[TEST: 67] PASSED
+[TEST: 68] PASSED
+[TEST: 69] PASSED
+[TEST: 70] PASSED
+[TEST: 71] PASSED
+[TEST: 72] PASSED
+[TEST: 73] PASSED
+[TEST: 74] PASSED
+[TEST: 75] PASSED
+[TEST: 76] PASSED
+[TEST: 77] PASSED
+[TEST: 78] PASSED
+[TEST: 79] PASSED
+[TEST: 80] PASSED
+[TEST: 81] PASSED
+[TEST: 82] PASSED
+[TEST: 83] PASSED
+[TEST: 84] PASSED
+[TEST: 85] PASSED
+[TEST: 86] PASSED
+[TEST: 87] PASSED
+[TEST: 88] PASSED
+[TEST: 89] PASSED
+[TEST: 90] PASSED
+[TEST: 91] PASSED
+[TEST: 92] PASSED
+[TEST: 93] PASSED
+[TEST: 94] PASSED
+[TEST: 95] PASSED
+[TEST: 96] PASSED
+[TEST: 97] PASSED
+[TEST: 98] PASSED
+[TEST: 99] PASSED
+[TEST: 100] PASSED
+[TEST: 101] PASSED
+[TEST: 102] PASSED
+[TEST: 103] PASSED
+[TEST: 104] PASSED
+[TEST: 105] PASSED
+[TEST: 106] PASSED
+[TEST: 107] PASSED
+[TEST: 108] PASSED
+[TEST: 109] PASSED
+[TEST: 110] PASSED
+[TEST: 111] PASSED
+[TEST: 112] PASSED
+[TEST: 113] PASSED
+[TEST: 114] PASSED
+[TEST: 115] PASSED
+[TEST: 116] PASSED
+[TEST: 117] PASSED
+[TEST: 118] PASSED
+[TEST: 119] PASSED
+[TEST: 120] PASSED
+[TEST: 121] PASSED
+[TEST: 122] PASSED
+[TEST: 123] PASSED
+[TEST: 124] PASSED
+[TEST: 125] PASSED
+[TEST: 126] PASSED
+[TEST: 127] PASSED
+[TEST: 128] PASSED
+#+end_example

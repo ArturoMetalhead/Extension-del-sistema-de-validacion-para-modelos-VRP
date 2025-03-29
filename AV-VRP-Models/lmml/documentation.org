@@ -1,0 +1,3305 @@
+#+TITLE: Documentation for LMML
+#+AUTHOR: Fernando Rodriguez Flores
+
+#+TODO: TODO BROKEN | DONE
+
+* Tutorials
+
+** August 2020
+   
+*** Tutorials on how to use the system
+**** Description
+      The tutorials in this section will show how to create several optimization models.  We'll write several models, each one with more complexity than the previous.
+
+      These tutorial assumes that the user has basic lisp knowledge and that she is using Emacs.  
+**** Very simple model
+***** Description
+       In this section we'll show how to a very simple optimization problem.
+
+       This tutorial assumes that the user has basic lisp knowledge and that she is using Emacs.  
+
+***** Getting the files
+
+      The first step is to get the files.  If you are reading this, you probably received a zipped file with several files, but the only necessary files are
+
+      - lmml.org
+      - lmml-case-sensitive.org
+      - gagm.lisp
+
+      At the time of writing this, the only way to get the files is to receive them by mail ;-).  It is unlikely that that changes in a near future.  Anyway, you can write to fernan@matcom.uh.cu and request a copy of the files.  If you want, you can write the email in spanish :-P.  
+
+***** Setting up an appropriate file system
+
+      Once you have the files, you should copy them to a folder.  In my case, this folder will be /tmp/lmml/
+
+      On that folder you should create a folder src.
+
+      On the terminal you can do that with:
+
+      #+begin_src sh
+      mkdir src
+      #+end_src
+
+      We also need to create a folder called tests.
+
+      #+begin_src sh
+      mkdir tests
+      #+end_src
+     
+
+      At this point, you should have the following structure on your folder
+
+      #+begin_src sh
+      ls /tmp/lmml
+      #+end_src
+
+      #+RESULTS:
+      | gagm.lisp               |
+      | lmml-case-sensitive.org |
+      | lmml.org                |
+      | src                     |
+      | tests                   |
+
+      Now, we only need one more step: move the file =gagm.lisp= to the folder =src=:
+
+      #+begin_src sh
+      mv gagm.lips src/
+      #+end_src
+     
+      After that operation, we get a folder with the following structure:
+
+      #+begin_src sh
+      ls /tmp/lmml
+      #+end_src
+
+      #+RESULTS:
+      | lmml-case-sensitive.org |
+      | lmml.org                |
+      | src                     |
+      | tests                   |
+     
+
+      Once this is done, we can create the source files to start working with the models.
+
+***** Creating the source files
+
+      The next step is to create the source files.  To do that, we'll use the Emacs function org-babel-tangle, as shown in the following steps.
+
+      1. Load the file lmml.org in Emacs
+      2. Tangle the file (M-x org-babel-tangle)
+
+         If you get an error at this point, make sure that both folders exists (src and tests).
+      3. Load the file lmml-case-sensitive.org in Emacs
+      4. Tangle the file (M-x org-babel-tangle)
+         If you get an error at this point, make sure that both folders exists (src and tests).        
+
+      After this, we are ready to start the Lisp and load the source code.
+
+      Note: After tangling the file lmml.org, a file named =emacs-utils.el= will appear on the folder.  That's OK.  That file is used to make it easier to work with the system in Emacs, but that's probably useful only to Fernando :-P.
+
+***** Load the system into the Lisp image
+
+      1. Start Lisp
+
+         To load the system, we need to start lisp.  In Emacs you can do this by typing =M-x slime=.
+
+      2. Set the working directory
+
+         After starting the Lisp, we need to set the working directory to the folder were we tangled the files.  In my case that folder is =/tmp/lmml/=.  In Emacs you can do that by typing =,= in the REPL, then =cd=, and then type the directory.
+
+      3. Load the files
+
+         Once the directory is set, we can load the system loading the file =src/load-files.lisp=:
+
+         #+begin_src lisp :results output
+         (load "src/load-lmml.lisp")
+         #+end_src
+
+         If everything worked fine, you should see in the REPL something like this:
+     
+         #+RESULTS:
+         #+begin_example
+         Loading src/gagm.lisp ........................... OK
+         Loading src/package.lisp ........................ OK
+         Loading src/generic-functions.lisp .............. OK
+         Loading src/utilities.lisp ...................... OK
+         Loading src/macros.lisp ......................... OK
+         Loading src/reader-macros.lisp .................. OK
+         Loading src/infix-to-prefix.lisp ................ OK
+         Loading src/ast-nodes.lisp ...................... OK
+         Loading src/basic-language.lisp ................. OK
+         Loading src/code-generation-utils.lisp .......... OK
+         Loading src/problem-examples.lisp ............... OK
+         Loading src/writer-gmpl.lisp .................... OK
+         Loading src/lmml-case-sensitivity.lisp .......... OK
+         #+end_example
+
+      4. Change to the package LMML
+
+         The last step to set up the system is to change to the package LMML.  That can be done with:
+
+         #+begin_src lisp :results value
+         (in-package :LMML)
+         #+end_src
+
+         #+RESULTS:
+         : #<PACKAGE "LMML">
+
+         If that worked (and if you are working on Emacs with slime) the prompt in the REPL should have changed to =LMML>=.
+
+      After these steps, we are ready to start writing our first model.  We'll do that on the next section.
+
+***** Very Basic Model (only variables)
+      In this tutorial we use LMML to create a very basic optimization model.  This problem won't have sets, or parameters, or summations.
+
+      The model is:
+
+      max 4x + 2y
+
+      s.t.
+
+         x + y <= 3
+
+****** create a new file
+       The first step is te create a new file.  I'll name it "tutorial1.lisp".
+****** add the package
+
+       In the new file, we need to specify that we are working on the package LMML.  We do that by adding the following line to the beginning of the file.
+
+       #+begin_src lisp :results none :tangle src/tutorial1.lisp
+       (in-package :lmml)
+       #+end_src
+
+****** declare the problem
+
+       The next step is to create a problem.  A problem requires at least 3 parameters:
+
+        - a symbol (where we'll store the problem),
+        - a string (with a descriptive name for the problem), and
+        - the instructions, that can be any number of instructions.
+
+       First, let's create a problem with the id and the name.
+
+       #+begin_src lisp :results none
+       (problem tutorial1-problem
+                "Example problem for the tutorial")
+       #+end_src
+****** add the variables
+       Every optimization problem has variables.  In this problem, we have two variables, both of them continuos.
+
+       We can declare continuos variables with the instruction: =variable-declaration=.  This instruction receives a symbol with the id of the variable.  It can receive more arguments, but that's all we'll need for this problem.
+
+       We can create the variables =x= and =y= with the instructions:
+
+       #+begin_src lisp :results none
+       (variable-declaration x)
+
+       (variable-declaration y)
+       #+end_src
+      
+****** add the objective function
+
+       The objective function for this problem is 4x + 2y, and we want to maximize it.
+
+       We declare that with the instruction =maximize=.  Besides the function itself, we need to add an identifier, for instance "obj".
+
+       #+begin_src lisp :results none
+       (maximize "obj" (+ (* 4 x)
+                          (* 2 y)))
+       #+end_src
+
+       If we want to minimize the objective function, we should use the instruction =minimize=, that receives exactly the same arguments.
+
+****** add the constraint
+
+       In this basic model we only have one constraint: x + y <= 3.  In LMML we have an instruction to add constraints: =constraints=.  This instruction receives an identifier and the constraint.  The constraint is an expression that contains a binary comparison.  In this case we have the following:
+
+       #+begin_src lisp :results none
+       (constraint "r1" (<= (+ x y) 3))
+       #+end_src
+
+****** add everything to the model
+
+       Finally, we add all the elements to the problem and we get the following:
+
+       #+begin_src lisp :results none  :tangle src/tutorial1.lisp
+       (problem tutorial1-problem
+                "Example 1 for LMML tutorial"
+
+                (variable-declaration x)
+                (variable-declaration y)
+
+                (maximize "obj" (+ (* 4 x) (* 2 y)))
+
+                (constraint "r1" (<= (+ x y) 3))))
+       #+end_src
+
+****** export the problem to GMPL
+
+       Once we have defined the problem, we can export it to any of the languages defined in LMML.  At the time of writing this tutorial the only defined language is GMPL, so we are going to export the problem to that language.
+
+       Right now, we have stored the AST of the problem in the variable =tutorial1-problem=.
+
+       Fortunately we can do that with only one line:
+
+       #+begin_src lisp :results output  :tangle src/tutorial1.lisp
+       (generate-code tutorial1-problem gmpl t)
+       #+end_src
+
+       #+RESULTS:
+       #+begin_example
+       /*Problem Example 1 for LMML tutorial*/
+
+
+       var X, >= 0;
+
+       var Y, >= 0;
+
+       maximize obj: 4*X + 2*Y;
+
+       s.t. r1: X + Y <= 3;
+
+       end;
+       #+end_example
+
+       The function =generate-code= receives 3 arguments:
+
+       - the ast of the model we want to export,
+       - the language to which the model should be exported, and
+       - the stream where we want to write the generated code.
+
+       In this case the ast is the model we have defined in =tutorial1-problem=, the language is GMPL, and the stream is T.  In Lisp, that stream means to write the standard-output.
+
+       Had we wanted to write the model to a file, we could have done the following:
+
+       #+begin_src lisp :results none
+       (with-open-file (f "/tmp/lmml/tutorial1.mod"
+                          :direction :output
+                          :if-exists :supersede)
+  
+         (generate-code tutorial1-problem gmpl f))
+       #+end_src
+      
+       In that case the model was written to the file "/tmp/lmml/tutorial1.mod".  You should change that path to a correct one on your machine.
+
+       To make sure it worked, we can call the program glpsol on our generated file like this:
+
+       #+begin_src sh :results output
+       glpsol -m /tmp/lmml/tutorial1.mod
+       #+end_src
+
+       #+RESULTS:
+       #+begin_example
+       GLPSOL: GLPK LP/MIP Solver, v4.57
+       Parameter(s) specified in the command line:
+        -m /tmp/lmml/tutorial1.mod
+       Reading model section from /tmp/lmml/tutorial1.mod...
+       12 lines were read
+       Generating obj...
+       Generating r1...
+       Model has been successfully generated
+       GLPK Simplex Optimizer, v4.57
+       2 rows, 2 columns, 4 non-zeros
+       Preprocessing...
+       1 row, 2 columns, 2 non-zeros
+       Scaling...
+        A: min|aij| =  1.000e+00  max|aij| =  1.000e+00  ratio =  1.000e+00
+       Problem data seem to be well scaled
+       Constructing initial basis...
+       Size of triangular part is 1
+       ,*     0: obj =  -0.000000000e+00 inf =   0.000e+00 (2)
+       ,*     1: obj =   1.200000000e+01 inf =   0.000e+00 (0)
+       OPTIMAL LP SOLUTION FOUND
+       Time used:   0.0 secs
+       Memory used: 0.1 Mb (102260 bytes)
+       #+end_example
+      
+       That output from glpsol means that the model was correctly created and solved.
+
+****** conclusion
+
+       Congratulations!  You have just finished your first tutorial on LMML.  In the next tutorial we'll cover some other topics.
+
+       For instance, let's check our model and the code generated from it.
+
+       This is our model in LMML:
+
+       #+begin_src lisp :results none  :tangle src/tutorial1.lisp
+       (problem tutorial1-problem
+                "Example 1 for LMML tutorial"
+
+                (variable-declaration x)
+                (variable-declaration y)
+
+                (maximize "obj" (+ (* 4 x) (* 2 y)))
+
+                (constraint "r1" (<= (+ x y) 3))))
+       #+end_src
+      
+       And this is the generated code:
+
+       #+begin_src lisp :results output  :tangle src/tutorial1.lisp
+       (generate-code tutorial1-problem gmpl t)
+       #+end_src
+
+       #+RESULTS:
+       #+begin_example
+       /*Problem Example 1 for LMML tutorial*/
+
+
+       var X, >= 0;
+
+       var Y, >= 0;
+
+       maximize obj: 4*X + 2*Y;
+
+       s.t. r1: X + Y <= 3;
+
+       end;
+       #+end_example
+
+       There is a difference.  We defined the variables with lowercase letters x and y, but in the generated code we have them in uppercase.  That happens because Common Lisp usually behaves as if it were case insensitive, and so upcases all the symbols.  But we don't want that behavior.  We want our variables, parameters and sets defined and stored in the same case as we type them.
+
+       In the next tutorial we'll deal with that issue ;-).
+
+**** Very simple model with case-sensitivity
+***** Description
+      This tutorial is an introduction on how to make the system case sensitive.
+
+       This tutorial assumes that the user has basic lisp knowledge and that she is using Emacs.  
+
+***** Getting the files
+
+      The first step is to get the files.  If you are reading this, you probably received a zipped file with several files, but the only necessary files are
+
+      - lmml.org
+      - lmml-case-sensitive.org
+      - gagm.lisp
+
+      At the time of writing this, the only way to get the files is to receive them by mail ;-).  It is unlikely that that changes in a near future.  Anyway, you can write to fernan@matcom.uh.cu and request a copy of the files.  If you want, you can write the email in spanish :-P.  
+
+***** Setting up an appropriate file system
+
+      Once you have the files, you should copy them to a folder.  In my case, this folder will be /tmp/lmml/
+
+      On that folder you should create a folder src.
+
+      On the terminal you can do that with:
+
+      #+begin_src sh
+      mkdir src
+      #+end_src
+
+      We also need to create a folder called tests.
+
+      #+begin_src sh
+      mkdir tests
+      #+end_src
+     
+
+      At this point, you should have the following structure on your folder
+
+      #+begin_src sh
+      ls /tmp/lmml
+      #+end_src
+
+      #+RESULTS:
+      | gagm.lisp               |
+      | lmml-case-sensitive.org |
+      | lmml.org                |
+      | src                     |
+      | tests                   |
+
+      Now, we only need one more step: move the file =gagm.lisp= to the folder =src=:
+
+      #+begin_src sh
+      mv gagm.lips src/
+      #+end_src
+     
+      After that operation, we get a folder with the following structure:
+
+      #+begin_src sh
+      ls /tmp/lmml
+      #+end_src
+
+      #+RESULTS:
+      | lmml-case-sensitive.org |
+      | lmml.org                |
+      | src                     |
+      | tests                   |
+     
+
+      Once this is done, we can create the source files to start working with the models.
+
+***** Creating the source files
+
+      The next step is to create the source files.  To do that, we'll use the Emacs function org-babel-tangle, as shown in the following steps.
+
+      1. Load the file lmml.org in Emacs
+      2. Tangle the file (M-x org-babel-tangle)
+
+         If you get an error at this point, make sure that both folders exists (src and tests).
+      3. Load the file lmml-case-sensitive.org in Emacs
+      4. Tangle the file (M-x org-babel-tangle)
+         If you get an error at this point, make sure that both folders exists (src and tests).        
+
+      After this, we are ready to start the Lisp and load the source code.
+
+      Note: After tangling the file lmml.org, a file named =emacs-utils.el= will appear on the folder.  That's OK.  That file is used to make it easier to work with the system in Emacs, but that's probably useful only to Fernando :-/.
+
+***** Load the system into the Lisp image
+
+      1. Start Lisp
+
+         To load the system, we need to start lisp.  In Emacs you can do this by typing =M-x slime=.
+
+      2. Set the working directory
+
+         After starting the Lisp, we need to set the working directory to the folder were we tangled the files.  In my case that folder is =/tmp/lmml/=.  In Emacs you can do that by typing =,= in the REPL, then =cd=, and then type the directory.
+
+      3. Load the files
+
+         Once the directory is set, we can load the system loading the file =src/load-files.lisp=:
+
+         #+begin_src lisp :results output
+         (load "src/load-lmml.lisp")
+         #+end_src
+
+	 #+RESULTS:
+	 #+begin_example
+	 Loading src/gagm.lisp ........................... OK
+	 Loading src/package.lisp ........................ OK
+	 Loading src/generic-functions.lisp .............. OK
+	 Loading src/utilities.lisp ...................... OK
+	 Loading src/macros.lisp ......................... OK
+	 Loading src/reader-macros.lisp .................. OK
+	 Loading src/infix-to-prefix.lisp ................ OK
+	 Loading src/ast-nodes.lisp ...................... OK
+	 Loading src/basic-language.lisp ................. OK
+	 Loading src/code-generation-utils.lisp .......... OK
+	 Loading src/problem-examples.lisp ............... OK
+	 Loading src/writer-gmpl.lisp .................... OK
+	 Loading src/lmml-case-sensitivity.lisp .......... OK
+	 #+end_example
+
+	
+
+         If everything worked fine, you should see in the REPL something like this:
+     
+         #+RESULTS:
+         #+begin_example
+         Loading src/gagm.lisp ........................... OK
+         Loading src/package.lisp ........................ OK
+         Loading src/generic-functions.lisp .............. OK
+         Loading src/utilities.lisp ...................... OK
+         Loading src/macros.lisp ......................... OK
+         Loading src/reader-macros.lisp .................. OK
+         Loading src/infix-to-prefix.lisp ................ OK
+         Loading src/ast-nodes.lisp ...................... OK
+         Loading src/basic-language.lisp ................. OK
+         Loading src/code-generation-utils.lisp .......... OK
+         Loading src/problem-examples.lisp ............... OK
+         Loading src/writer-gmpl.lisp .................... OK
+         Loading src/lmml-case-sensitivity.lisp .......... OK
+         #+end_example
+
+      4. Change to the package LMML
+
+         The last step to set up the system is to change to the package LMML.  That can be done with:
+
+         #+begin_src lisp :results value
+         (in-package :LMML)
+         #+end_src
+
+         #+RESULTS:
+	 : #<PACKAGE "LMML">
+
+         If that worked (and if you are working on Emacs with slime) the prompt in the REPL should have changed to =LMML>=.
+
+      After these steps, we are ready to start writing our first model.  We'll do that on the next section.
+
+***** Very Basic Model (only variables)
+      In this tutorial we use LMML to create a very basic optimization model.  This problem won't have sets, or parameters, or summations.
+
+      The model is:
+
+      max 4x + 2y
+
+      s.t.
+
+         x + y <= 3
+
+      In the previous tutorial we created a model for that problem, but the model we created was case-insensitive.  In this tutorial we'll be able to create a case-sensitive problem.
+
+****** create a new file
+       The first step is te create a new file.  I'll name it "tutorial2.lisp".
+****** add the package
+
+       In the new file, we need to specify that we are working on the package LMML.  We do that by adding the following line to the beginning of the file.
+
+       #+begin_src lisp :results none :tangle src/tutorial2.lisp
+       (in-package :lmml)
+       #+end_src
+
+****** make the system case sensitive
+
+       Lisp is a case-sensitive language, although it usually behaves in a case-insensitive way.  The explanation for that is somewhat large and I won't put it here, but I recommend the book Common Lisp Recipes by Edmund Weitz, to understand that topic.
+
+       The point is that at any time we can turn Lisp into a case-sensitive language, where all the standard functions are in UPPERCASE.  That means that the function =(exit)= won't exist anymore :-o.  If you want to use that function you'll need to call it as =(EXIT)=.
+
+       With that in mind, let's make LMML case-sensitive.  That is done with the function
+
+       #+begin_src lisp :results result :tangle src/tutorial2.lisp
+       (turn-on-case-sensitivity)
+       #+end_src
+
+       #+RESULTS:
+       : :PRESERVE
+
+   
+
+       When that function is run, you should see the result =:PRESERVE=.  That means that the system is currently case-sensitive, and we are ready to write our case-sensitive model ;-).
+
+****** how to check the case-sensitivity status of the system
+
+       At any moment, the system can behave as case-sensitive or case-insensitive.  To check that we can use the function =(check-case-sensitivity)=.
+
+       #+begin_src lisp :results result :tangle src/tutorial2.lisp
+       (check-case-sensitivity)
+       #+end_src
+
+       #+RESULTS:
+       : :UPCASE
+
+   
+
+       If the function returns the value =:PRESERVE=, then the system is behaving in a case-sensitive way.
+
+****** how to turn-off the case-sensitivity status of the system
+
+       It is possible to turn off the case-sensitivity in the system.  That can be done with the function =(turn-off-case-sensitivity)=.
+       
+       #+begin_src lisp :results result :tangle src/tutorial2.lisp
+       (turn-off-case-sensitivity)
+       #+end_src
+
+       #+RESULTS:
+       : :UPCASE
+       
+       The function =(turn-off-case-sensitivity)= returns the keyword =:UPCASE= and turns off the case-sensitivity.
+
+       If we check now the case-sensitivity of the system we get:
+
+       #+begin_src lisp :results result :tangle src/tutorial2.lisp
+       (check-case-sensitivity)
+       #+end_src
+
+       #+RESULTS:
+       : :UPCASE
+
+       =:UPCASE= means that the system is not case-sensitive.
+
+       The function =check-case-sensitivity= returns two possible values: =:UPCASE= and =:PRESERVE=.  The former means that the system is case-insensitive (as Lisp usually is), and the latter means that the system is case-sensitive, as we want ;-).
+
+       Right now the system is case-insensitive, and we want it to behave with case-sensitivity, so we turn it on ;-).
+
+       #+begin_src lisp :results result :tangle src/tutorial2.lisp
+       (turn-on-case-sensitivity)
+       #+end_src
+
+       #+RESULTS:
+       : :PRESERVE
+
+       And now we are ready to write case-sensitive models.
+       
+****** declare the problem
+
+       The next step is to create a problem.  A problem requires at least 3 parameters:
+
+        - a symbol (where we'll store the problem),
+        - a string (with a descriptive name for the problem), and
+        - the instructions, that can be any number of instructions.
+
+       First, let's create a problem with the id and the name.
+
+       #+begin_src lisp :results none
+       (problem tutorial2-problem
+                "Example problem for the tutorial on case-sensitivity")
+       #+end_src
+       
+       In this case it is important to note that name of the problem is =tutorial2-problem= exactly with that case.
+
+       #+begin_src lisp :results value
+       tutorial2-problem
+       #+end_src
+
+       #+RESULTS:
+       : problem:
+
+       However, if we change the case of the symbol we get an error.  The change was to make the first T uppercase.
+
+       #+begin_src lisp :results value
+       Tutorial2-problem
+       #+end_src
+       
+       #+begin_example
+       The variable Tutorial2-problem is unbound.
+       [Condition of type UNBOUND-VARIABLE]
+
+       Restarts:
+        0: [RETRY] Retry SLIME REPL evaluation request.
+        1: [*ABORT] Return to SLIME's top level.
+        2: [ABORT] abort thread (#<THREAD "repl-thread" RUNNING {10066836A3}>)
+       
+       Backtrace:
+         0: (SB-INT:SIMPLE-EVAL-IN-LEXENV Tutorial2-problem #<NULL-LEXENV>)
+         1: (EVAL Tutorial2-problem)
+       #+end_example
+
+       This is important from now on.  Everything should be typed with the appropriate case.
+
+       From here on, the rest of the tutorias is exactly the same as the previous one:
+
+****** add the variables
+       Every optimization problem has variables.  In this problem, we have two variables, both of them continuos.
+
+       We can declare continuos variables with the instruction: =variable-declaration=.  This instruction receives a symbol with the id of the variable.  It can receive more arguments, but that's all we'll need for this problem.
+
+       We can create the variables =x= and =y= with the instructions:
+
+       #+begin_src lisp :results none
+       (variable-declaration x)
+
+       (variable-declaration y)
+       #+end_src
+      
+****** add the objective function
+
+       The objective function for this problem is 4x + 2y, and we want to maximize it.
+
+       We declare that with the instruction =maximize=.  Besides the function itself, we need to add an identifier, for instance "obj".
+
+       #+begin_src lisp :results none
+       (maximize "obj" (+ (* 4 x)
+                          (* 2 y)))
+       #+end_src
+
+       If we want to minimize the objective function, we should use the instruction =minimize=, that receives exactly the same arguments.
+
+****** add the constraint
+
+       In this basic model we only have one constraint: x + y <= 3.  In LMML we have an instruction to add constraints: =constraints=.  This instruction receives an identifier and the constraint.  The constraint is an expression that contains a binary comparison.  In this case we have the following:
+
+       #+begin_src lisp :results none
+       (constraint "r1" (<= (+ x y) 3))
+       #+end_src
+
+****** add everything to the model
+
+       Finally, we add all the elements to the problem and we get the following:
+
+       #+begin_src lisp :results none  :tangle src/tutorial2.lisp
+       (problem tutorial2-problem
+                "Example 1 for LMML tutorial with case sensitivity"
+
+                (variable-declaration x)
+                (variable-declaration y)
+
+                (maximize "obj" (+ (* 4 x) (* 2 y)))
+
+                (constraint "r1" (<= (+ x y) 3)))
+       #+end_src
+
+****** export the problem to GMPL (and solve it)
+
+       Once we have defined the problem, we can export it to any of the languages defined in LMML.  At the time of writing this tutorial the only defined language is GMPL, so we are going to export the problem to that language.
+
+       Right now, we have stored the AST of the problem in the variable =tutorial2-problem=.
+
+       Fortunately we can do that with only one line:
+
+       #+begin_src lisp :results output  :tangle src/tutorial1.lisp
+       (generate-code tutorial2-problem gmpl t)
+       #+end_src
+
+       #+RESULTS:
+       #+begin_example
+       /*Problem Example 1 for LMML tutorial with case sensitivity*/
+
+
+       var X, >= 0;
+
+       var Y, >= 0;
+
+       maximize obj: 4*X + 2*Y;
+
+       s.t. r1: X + Y <= 3;
+
+       end;
+       #+end_example
+
+       The arguments of the function =generate-code= can be found in the previous tutorial.
+
+       Now we can see that the names of the variables in the generated code are lowercase, in the same way that we created them in Lisp.  This happened because of the function =(turn-on-case-sensitivity)=.
+
+
+       Had we wanted to write the model to a file, we could have done the following:
+
+       #+begin_src lisp :results none
+       (WITH-OPEN-FILE (f "/tmp/lmml/tutorial2.mod"
+                          :DIRECTION :OUTPUT
+                          :IF-EXISTS :SUPERSEDE)
+
+         (generate-code tutorial2-problem gmpl f))
+       #+end_src
+
+       Note that the instruction =WITH-OPEN-FILE= is written in uppercase letters as well as the keywords =:DIRECTION=, =:OUTPUT=, =:IF-EXISTS=, and =:SUPERSEDE=.  This is also because of the call to =(turn-on-case-sensitivity)=.  The reason is that there is not lowercase version that macro nor it's keywords.
+
+       We didn't have to 'uppercase' the function or arguments in
+
+       =(generate-code tutorial2-problem gmpl t)=
+
+       because there are lowercase version of the function =GENERATE-CODE=, as well as the symbols =GMPL= and =T=.
+
+       After the previous code is executed, the model is written to the file "/tmp/lmml/tutorial2.mod".  You should change that path to a correct one on your machine.
+
+       To make sure it all worked as expected, we can call the program glpsol on our generated file like this:
+
+       #+begin_src sh :results output
+       glpsol -m /tmp/lmml/tutorial2.mod
+       #+end_src
+
+       #+RESULTS:
+       #+begin_example
+       GLPSOL: GLPK LP/MIP Solver, v4.57
+       Parameter(s) specified in the command line:
+        -m /tmp/lmml/tutorial2.mod
+       Reading model section from /tmp/lmml/tutorial2.mod...
+       12 lines were read
+       Generating obj...
+       Generating r1...
+       Model has been successfully generated
+       GLPK Simplex Optimizer, v4.57
+       2 rows, 2 columns, 4 non-zeros
+       Preprocessing...
+       1 row, 2 columns, 2 non-zeros
+       Scaling...
+        A: min|aij| =  1.000e+00  max|aij| =  1.000e+00  ratio =  1.000e+00
+       Problem data seem to be well scaled
+       Constructing initial basis...
+       Size of triangular part is 1
+       *     0: obj =  -0.000000000e+00 inf =   0.000e+00 (2)
+       *     1: obj =   1.200000000e+01 inf =   0.000e+00 (0)
+       OPTIMAL LP SOLUTION FOUND
+       Time used:   0.0 secs
+       Memory used: 0.1 Mb (102260 bytes)
+       #+end_example
+      
+       That output from glpsol means that the model was correctly created and solved.
+
+****** make the Lisp system case insensitive again
+       Finally, we should make the lisp system case insensitive again.  Actually, we could have done that after we created the model, because all we wanted was to have different meanings for the same letter in uppercase and lowercase version.
+
+       To make the Lisp system case insensitive again, we use the function =(turn-off-case-sensitivity)=, like this:
+
+       #+begin_src lisp :results result :tangle src/tutorial2.lisp
+       (turn-off-case-sensitivity)
+       #+end_src
+
+       #+RESULTS:
+       : :UPCASE
+
+       And that's all :-D
+
+****** conclusion
+
+       Congratulations!  You have just finished your first case sensitive model in LMML \o/.  In the next tutorial we'll write models with other elements as sets, parameters, and summations.
+**** Model with parameters
+***** Description
+      This tutorial is an introduction on how to use parameters in the model.
+
+       This tutorial assumes that the user has basic lisp knowledge and that she is using Emacs.  
+***** Getting the files
+
+      The first step is to get the files.  If you are reading this, you probably received a zipped file with several files, but the only necessary files are
+
+      - lmml.org
+      - lmml-case-sensitive.org
+      - gagm.lisp
+
+      At the time of writing this, the only way to get the files is to receive them by mail ;-).  It is unlikely that that changes in a near future.  Anyway, you can write to fernan@matcom.uh.cu and request a copy of the files.  If you want, you can write the email in spanish :-P.  
+***** Setting up an appropriate file system
+
+      Once you have the files, you should copy them to a folder.  In my case, this folder will be /tmp/lmml/
+
+      On that folder you should create a folder src.
+
+      On the terminal you can do that with:
+
+      #+begin_src sh
+      mkdir src
+      #+end_src
+
+      We also need to create a folder called tests.
+
+      #+begin_src sh
+      mkdir tests
+      #+end_src
+     
+
+      At this point, you should have the following structure on your folder
+
+      #+begin_src sh
+      ls /tmp/lmml
+      #+end_src
+
+      #+RESULTS:
+      | gagm.lisp               |
+      | lmml-case-sensitive.org |
+      | lmml.org                |
+      | src                     |
+      | tests                   |
+
+      Now, we only need one more step: move the file =gagm.lisp= to the folder =src=:
+
+      #+begin_src sh
+      mv gagm.lips src/
+      #+end_src
+     
+      After that operation, we get a folder with the following structure:
+
+      #+begin_src sh
+      ls /tmp/lmml
+      #+end_src
+
+      #+RESULTS:
+      | lmml-case-sensitive.org |
+      | lmml.org                |
+      | src                     |
+      | tests                   |
+     
+
+      Once this is done, we can create the source files to start working with the models.
+***** Creating the source files
+
+      The next step is to create the source files.  To do that, we'll use the Emacs function org-babel-tangle, as shown in the following steps.
+
+      1. Load the file lmml.org in Emacs
+      2. Tangle the file (M-x org-babel-tangle)
+
+         If you get an error at this point, make sure that both folders exists (src and tests).
+      3. Load the file lmml-case-sensitive.org in Emacs
+      4. Tangle the file (M-x org-babel-tangle)
+         If you get an error at this point, make sure that both folders exists (src and tests).        
+
+      After this, we are ready to start the Lisp and load the source code.
+
+      Note: After tangling the file lmml.org, a file named =emacs-utils.el= will appear on the folder.  That's OK.  That file is used to make it easier to work with the system in Emacs, but that's probably useful only to Fernando :-/.
+***** Load the system into the Lisp image
+
+      1. Start Lisp
+
+         To load the system, we need to start lisp.  In Emacs you can do this by typing =M-x slime=.
+
+      2. Set the working directory
+
+         After starting the Lisp, we need to set the working directory to the folder were we tangled the files.  In my case that folder is =/tmp/lmml/=.  In Emacs you can do that by typing =,= in the REPL, then =cd=, and then type the directory.
+
+      3. Load the files
+
+         Once the directory is set, we can load the system loading the file =src/load-files.lisp=:
+
+         #+begin_src lisp :results output
+         (load "src/load-lmml.lisp")
+         #+end_src
+
+         If everything worked fine, you should see in the REPL something like this:
+     
+         #+RESULTS:
+         #+begin_example
+         Loading src/gagm.lisp ........................... OK
+         Loading src/package.lisp ........................ OK
+         Loading src/generic-functions.lisp .............. OK
+         Loading src/utilities.lisp ...................... OK
+         Loading src/macros.lisp ......................... OK
+         Loading src/reader-macros.lisp .................. OK
+         Loading src/infix-to-prefix.lisp ................ OK
+         Loading src/ast-nodes.lisp ...................... OK
+         Loading src/basic-language.lisp ................. OK
+         Loading src/code-generation-utils.lisp .......... OK
+         Loading src/problem-examples.lisp ............... OK
+         Loading src/writer-gmpl.lisp .................... OK
+         Loading src/lmml-case-sensitivity.lisp .......... OK
+         #+end_example
+
+      4. Change to the package LMML
+
+         The last step to set up the system is to change to the package LMML.  That can be done with:
+
+         #+begin_src lisp :results value
+         (in-package :LMML)
+         #+end_src
+
+         #+RESULTS:
+         : #<PACKAGE "LMML">
+
+         If that worked (and if you are working on Emacs with slime) the prompt in the REPL should have changed to =LMML>=.
+
+      After these steps, we are ready to start writing our first model.  We'll do that on the next section.
+***** Basic Model with parameters
+      In this tutorial we use LMML to create a very basic optimization model.  This problem won't have sets, or parameters, or summations.
+
+      The model is:
+
+      max c1 * x + c2 * y
+
+      s.t.
+
+         x + y <= 3
+
+      x,y >= 0
+
+      c1 = 4
+      c2 = 5
+
+      In the previous tutorial we created a model for that problem, but the model we created was case-insensitive.  In this tutorial we'll be able to create a case-sensitive problem.
+
+****** create a new file
+       The first step is te create a new file.  I'll name it "tutorial3.lisp".
+****** add the package
+
+       In the new file, we need to specify that we are working on the package LMML.  We do that by adding the following line to the beginning of the file.
+
+       #+begin_src lisp :results none :tangle src/tutorial3.lisp
+       (in-package :lmml)
+       #+end_src
+
+****** make the system case sensitive
+
+       We'll make the system case sensitive.
+
+       Remember that many of the errors you can get from now on is due to the fact that the functions exists only in the uppercase version.  For instance, the function =(exit)= won't exist anymore :-o.  If you want to use that function (or any other function) you'll need to use the uppercase version, like =(EXIT)= in this case..
+
+       With that in mind, let's make LMML case-sensitive.  That is done with the function
+
+       #+begin_src lisp :results result :tangle src/tutorial3.lisp
+       (turn-on-case-sensitivity)
+       #+end_src
+
+       #+RESULTS:
+       : :PRESERVE
+
+****** declare the problem
+
+       The next step is to create a problem.  A problem requires at least 3 parameters:
+
+        - a symbol (where we'll store the problem),
+        - a string (with a descriptive name for the problem), and
+        - the instructions, that can be any number of instructions.
+
+       First, let's create a problem with the id and the name.
+
+       #+begin_src lisp :results none
+       (problem tutorial3-problem
+                "Example problem for the tutorial.  This one has parameters.")
+       #+end_src
+       
+       In this case it is important to note that name of the problem is =tutorial3-problem= exactly with that case.
+
+       #+begin_src lisp :results value
+       tutorial3-problem
+       #+end_src
+
+       #+RESULTS:
+       : problem: Example problem for the tutorial
+       :    (INSTRUCTIONS-LIST (ELEMENTS NIL) )
+
+       However, if we change the case of the symbol we get an error.  The change was to make the first T uppercase.
+
+       #+begin_src lisp :results value
+       Tutorial3-problem
+       #+end_src
+       
+       #+begin_example
+       The variable Tutorial3-problem is unbound.
+       [Condition of type UNBOUND-VARIABLE]
+
+       Restarts:
+        0: [RETRY] Retry SLIME REPL evaluation request.
+        1: [*ABORT] Return to SLIME's top level.
+        2: [ABORT] abort thread (#<THREAD "repl-thread" RUNNING {10066836A3}>)
+       
+       Backtrace:
+         0: (SB-INT:SIMPLE-EVAL-IN-LEXENV Tutorial3-problem #<NULL-LEXENV>)
+         1: (EVAL Tutorial3-problem)
+       #+end_example
+
+       This is important from now on.  Everything should be typed with the appropriate case.  The first step is to add the parameters.
+
+****** add the parameters to the problem
+       We can declare the parameters with the instruction =parameter=.  That instructions receives a symbol with the name of the parameter.  If we want to declare the value of that parameter, we should use the keyword =:value=, as shown:
+
+       In the case of the example we should write:
+
+       #+begin_src lisp :results none
+       (parameter c1 :value 4)
+
+       (parameter c2 :value 5)
+       #+end_src
+
+       In the first line we declare a parameter named c1 with value 4.  In the second line we declare another parameter named c2 with value 5.
+       
+****** add the variables
+       Every optimization problem has variables.  In this problem, we have two variables, both of them continuos.
+
+       We can declare continuos variables with the instruction: =variable-declaration=.  This instruction receives a symbol with the id of the variable.  It can receive more arguments, but that's all we'll need for this problem.
+
+       We can create the variables =x= and =y= with the instructions:
+
+       #+begin_src lisp :results none
+       (variable-declaration x)
+
+       (variable-declaration y)
+       #+end_src
+      
+****** add the objective function
+
+       The objective function for this problem is c1 * x + c2 * y, and we want to maximize it.
+
+       We declare that with the instruction =maximize=.  Besides the function itself, we need to add an identifier, for instance "obj".
+
+       #+begin_src lisp :results none
+       (maximize "obj" (+ (* c1 x)
+                          (* c2 y)))
+       #+end_src
+
+       If we want to minimize the objective function, we should use the instruction =minimize=, that receives exactly the same arguments.
+
+****** add the constraint
+
+       In this model we only have one constraint: x + y <= 3.  In LMML we have an instruction to add constraints: =constraints=.  This instruction receives an identifier and the constraint.  The constraint is an expression that contains a binary comparison.  In this case we have the following:
+
+       #+begin_src lisp :results none
+       (constraint "r1" (<= (+ x y) 3))
+       #+end_src
+
+****** add everything to the model
+
+       Finally, we add all the elements to the problem and we get the following:
+
+       #+begin_src lisp :results none  :tangle src/tutorial3.lisp
+       (problem tutorial3-problem
+                "Example 3 for LMML tutorial with parameters"
+
+                (parameter c1 :value 4)
+                (parameter c2 :value 5)
+
+                (variable-declaration x)
+                (variable-declaration y)
+
+                (maximize "obj" (+ (* 4 x) (* 2 y)))
+
+                (constraint "r1" (<= (+ x y) 3)))
+       #+end_src
+
+****** export the problem to GMPL (and solve it)
+
+       Once we have defined the problem, we can export it to any of the languages defined in LMML.  At the time of writing this tutorial the only defined language is GMPL, so we are going to export the problem to that language.
+
+       Right now, we have stored the AST of the problem in the variable =tutorial3-problem=.
+
+       We can export it to any (defined) language with the following line:
+
+       #+begin_src lisp :results output  :tangle src/tutorial1.lisp
+       (generate-code tutorial3-problem gmpl t)
+       #+end_src
+
+       #+RESULTS:
+       #+begin_example
+       /*Problem Example 3 for LMML tutorial with parameters*/
+
+
+       param c1 := 4;
+
+       param c2 := 5;
+
+       var x, >= 0;
+
+       var y, >= 0;
+
+       maximize obj: 4*x + 2*y;
+
+       s.t. r1: x + y <= 3;
+
+       end;
+       #+end_example
+
+       The function =generate-code= receives the AST we want to export, the language we want to export to, and a stream: in this case, the stream is t (the standard output).
+
+       Had we wanted to write the model to a file, we could have done the following:
+
+       #+begin_src lisp :results none
+       (WITH-OPEN-FILE (f "/tmp/lmml/tutorial3.mod"
+                          :DIRECTION :OUTPUT
+                          :IF-EXISTS :SUPERSEDE)
+
+         (generate-code tutorial3-problem gmpl f))
+       #+end_src
+
+       Note that the instruction =WITH-OPEN-FILE= is written in uppercase letters as well as the keywords =:DIRECTION=, =:OUTPUT=, =:IF-EXISTS=, and =:SUPERSEDE=.  This is also because of the call to =(turn-on-case-sensitivity)=.  The reason is that there is not lowercase version that macro nor it's keywords.
+
+       We didn't have to 'uppercase' the function or arguments in
+
+       =(generate-code tutorial3-problem gmpl t)=
+
+       because there are lowercase version of the function =GENERATE-CODE=, as well as the symbols =GMPL= and =T=.
+
+       After the previous code is executed, the model is written to the file "/tmp/lmml/tutorial3.mod".  You should change that path to a correct one on your machine.
+
+       To make sure it all worked as expected, we can call the program glpsol on our generated file like this:
+
+       #+begin_src sh :results output
+       glpsol -m /tmp/lmml/tutorial3.mod
+       #+end_src
+
+       #+RESULTS:
+       #+begin_example
+       GLPSOL: GLPK LP/MIP Solver, v4.57
+       Parameter(s) specified in the command line:
+        -m /tmp/lmml/tutorial3.mod
+       Reading model section from /tmp/lmml/tutorial3.mod...
+       16 lines were read
+       Generating obj...
+       Generating r1...
+       Model has been successfully generated
+       GLPK Simplex Optimizer, v4.57
+       2 rows, 2 columns, 4 non-zeros
+       Preprocessing...
+       1 row, 2 columns, 2 non-zeros
+       Scaling...
+        A: min|aij| =  1.000e+00  max|aij| =  1.000e+00  ratio =  1.000e+00
+       Problem data seem to be well scaled
+       Constructing initial basis...
+       Size of triangular part is 1
+       ,*     0: obj =  -0.000000000e+00 inf =   0.000e+00 (2)
+       ,*     1: obj =   1.200000000e+01 inf =   0.000e+00 (0)
+       OPTIMAL LP SOLUTION FOUND
+       Time used:   0.0 secs
+       Memory used: 0.1 Mb (102260 bytes)
+       #+end_example
+      
+       That output from glpsol means that the model was correctly created and solved.
+
+****** make the Lisp system case insensitive again
+       Finally, we should make the lisp system case insensitive again. 
+
+       To make the Lisp system case insensitive again, we use the function =(turn-off-case-sensitivity)=, like this:
+
+       #+begin_src lisp :results result :tangle src/tutorial3.lisp
+       (turn-off-case-sensitivity)
+       #+end_src
+
+       #+RESULTS:
+       : :UPCASE
+
+       And that's all :-D
+
+****** conclusion
+
+       Congratulations!  You have just finished your third LMML tutorial, and now you can write models with parameters :-o.  In the next tutorial we'll write models with sets and summations.
+**** Model with sets and index at
+***** Description
+      This tutorial is an introduction on how to use sets and indexed variables.
+
+       This tutorial assumes that the user has basic lisp knowledge and that she is using Emacs.  
+***** Getting the files
+
+      The first step is to get the files.  If you are reading this, you probably received a zipped file with several files, but the only necessary files are
+
+      - lmml.org
+      - lmml-case-sensitive.org
+      - gagm.lisp
+
+      At the time of writing this, the only way to get the files is to receive them by mail ;-).  It is unlikely that that changes in a near future.  Anyway, you can write to fernan@matcom.uh.cu and request a copy of the files.  If you want, you can write the email in spanish :-P.  
+***** Setting up an appropriate file system
+
+      Once you have the files, you should copy them to a folder.  In my case, this folder will be /tmp/lmml/
+
+      On that folder you should create a folder src.
+
+      On the terminal you can do that with:
+
+      #+begin_src sh
+      mkdir src
+      #+end_src
+
+      We also need to create a folder called tests.
+
+      #+begin_src sh
+      mkdir tests
+      #+end_src
+     
+
+      At this point, you should have the following structure on your folder
+
+      #+begin_src sh
+      ls /tmp/lmml
+      #+end_src
+
+      #+RESULTS:
+      | gagm.lisp               |
+      | lmml-case-sensitive.org |
+      | lmml.org                |
+      | src                     |
+      | tests                   |
+
+      Now, we only need one more step: move the file =gagm.lisp= to the folder =src=:
+
+      #+begin_src sh
+      mv gagm.lips src/
+      #+end_src
+     
+      After that operation, we get a folder with the following structure:
+
+      #+begin_src sh
+      ls /tmp/lmml
+      #+end_src
+
+      #+RESULTS:
+      | lmml-case-sensitive.org |
+      | lmml.org                |
+      | src                     |
+      | tests                   |
+     
+
+      Once this is done, we can create the source files to start working with the models.
+***** Creating the source files
+
+      The next step is to create the source files.  To do that, we'll use the Emacs function org-babel-tangle, as shown in the following steps.
+
+      1. Load the file lmml.org in Emacs
+      2. Tangle the file (M-x org-babel-tangle)
+
+         If you get an error at this point, make sure that both folders exists (src and tests).
+      3. Load the file lmml-case-sensitive.org in Emacs
+      4. Tangle the file (M-x org-babel-tangle)
+         If you get an error at this point, make sure that both folders exists (src and tests).        
+
+      After this, we are ready to start the Lisp and load the source code.
+
+      Note: After tangling the file lmml.org, a file named =emacs-utils.el= will appear on the folder.  That's OK.  That file is used to make it easier to work with the system in Emacs, but that's probably useful only to Fernando :-/.
+***** Load the system into the Lisp image
+
+      1. Start Lisp
+
+         To load the system, we need to start lisp.  In Emacs you can do this by typing =M-x slime=.
+
+      2. Set the working directory
+
+         After starting the Lisp, we need to set the working directory to the folder were we tangled the files.  In my case that folder is =/tmp/lmml/=.  In Emacs you can do that by typing =,= in the REPL, then =cd=, and then type the directory.
+
+      3. Load the files
+
+         Once the directory is set, we can load the system loading the file =src/load-files.lisp=:
+
+         #+begin_src lisp :results output
+         (load "src/load-lmml.lisp")
+         #+end_src
+
+         If everything worked fine, you should see in the REPL something like this:
+     
+         #+RESULTS:
+         #+begin_example
+         Loading src/gagm.lisp ........................... OK
+         Loading src/package.lisp ........................ OK
+         Loading src/generic-functions.lisp .............. OK
+         Loading src/utilities.lisp ...................... OK
+         Loading src/macros.lisp ......................... OK
+         Loading src/reader-macros.lisp .................. OK
+         Loading src/infix-to-prefix.lisp ................ OK
+         Loading src/ast-nodes.lisp ...................... OK
+         Loading src/basic-language.lisp ................. OK
+         Loading src/code-generation-utils.lisp .......... OK
+         Loading src/problem-examples.lisp ............... OK
+         Loading src/writer-gmpl.lisp .................... OK
+         Loading src/lmml-case-sensitivity.lisp .......... OK
+         #+end_example
+
+      4. Change to the package LMML
+
+         The last step to set up the system is to change to the package LMML.  That can be done with:
+
+         #+begin_src lisp :results value
+         (in-package :LMML)
+         #+end_src
+
+         #+RESULTS:
+         : #<PACKAGE "LMML">
+
+         If that worked (and if you are working on Emacs with slime) the prompt in the REPL should have changed to =LMML>=.
+
+      After these steps, we are ready to start writing our first model.  We'll do that on the next section.
+***** Model with sets
+      In this tutorial we use LMML to create an optimization model with a set and indexed variables.  
+
+      The model is:
+
+      set I = {1,2}
+
+      max  3* x[1] + 4 * x[2]
+
+      s.t.
+
+         x[1] + x[2] <= 3
+
+      x[i] >= 0 forall i in I
+
+
+      The new elements in this model are the set and how to access the elements of the indexed variable.
+
+****** create a new file
+       The first step is te create a new file.  I'll name it "tutorial4.lisp".
+****** add the package
+
+       In the new file, we need to specify that we are working on the package LMML.  We do that by adding the following line to the beginning of the file.
+
+       #+begin_src lisp :results none :tangle src/tutorial4.lisp
+       (in-package :lmml)
+       #+end_src
+
+****** make the system case sensitive
+
+       We'll make the system case sensitive.
+
+       Remember that many of the errors you can get from now on is due to the fact that the functions exists only in the uppercase version.  For instance, the function =(exit)= won't exist anymore :-o.  If you want to use that function (or any other function) you'll need to use the uppercase version, like =(EXIT)= in this case..
+
+       With that in mind, let's make LMML case-sensitive.  That is done with the function
+
+       #+begin_src lisp :results result :tangle src/tutorial4.lisp
+       (turn-on-case-sensitivity)
+       #+end_src
+
+       #+RESULTS:
+       : :PRESERVE
+
+****** declare the problem
+
+       The next step is to create a problem.  A problem requires at least 3 parameters:
+
+        - a symbol (where we'll store the problem),
+        - a string (with a descriptive name for the problem), and
+        - the instructions, that can be any number of instructions.
+
+       First, let's create a problem with the id and the name.
+
+       #+begin_src lisp :results none
+       (problem tutorial4-problem
+                "Example problem for the tutorial.  This one has a set and indexed variables.")
+       #+end_src
+
+****** add the set
+       The first thing is to add the set.  That is done with the instruction =set=.  The instruction =set= receives a symbol as in 
+
+       #+begin_src lisp :results none
+       (set I)
+       #+end_src
+
+       However, we can declare the set and assign some value to it.  In the case of sets, the value should be a list, as in:
+
+       #+begin_src lisp :results none
+       (set I :value '(1 2))
+       #+end_src
+
+       In LMML, we can define sets as list using { and }.  Using those elements we can define the set in the following way:
+
+       #+begin_src lisp :results none
+       (set I :value {1 2})
+       #+end_src
+
+       From now on, every time we'll need to declare a list representing a set, we'll use { and }.
+       
+****** add the variables
+       In this model, instead of having two variables, we'll have only one, but indexed in the set I.  To do that, we use the instruction =variable-declaration=, and declare the domain of the variable with the keyword =:domain=.
+
+       The argument of the keyword =:domain= should be a list with the sets in which the variable should be indexed.  In this case, we have only one index (I), so we could write =:domain {I}=.
+
+       #+begin_src lisp :results none
+       (variable-declaration x :domain {I})
+       #+end_src
+
+       That means to create a variable named =x= and indexed on the set =I=.
+
+       If the variable were y[i,j], with i and j in I, we could write:
+
+       #+begin_src lisp :results none
+       (variable-declaration y :domain {I I})
+       #+end_src
+****** accessing the elements of an indexed variable
+
+       The objective function for this problem is 3 x[1] + 4 x[2], and we want to maximize it.
+
+       To write this function, we need to access the indices 1 and 2 of the variable x.  We can do that with the instruction =index-at=.  The function =index-at= receives a symbol representing a variable and an expression that will be computed to get the index.
+
+       For instance, to access the 1st element of x we write:
+
+       #+begin_src lisp :results none
+       (index-at x 1)
+       #+end_src
+
+       To access the 3rd element of x we could write:
+
+       #+begin_src lisp :results none
+       (index-at x 3)
+       #+end_src
+
+       or
+
+       #+begin_src lisp :results none
+       (index-at x (+ 1 2))
+       #+end_src
+       
+       In both cases we get the same result.
+
+       However, if we write =index-at= everytime we want to access an element of a variable, the model could get difficult to read :-(.  To avoid that we can use the symbols [ and ] as =[x 1]= and that's equivalent to =(index-at x 1)=.  =[x 1 3 4]= is equivalent to =(index-at x 1 3 4)=.
+
+       From now on, every time we want to access an element of an indexed variable, we'll use the [-] syntax.
+
+****** add the objective function
+
+       The objective function for this problem is 3 x[1] + 4 x[2], and we want to maximize it.
+
+       Using the [-] syntax we can write that objective function as:
+
+       #+begin_src lisp :results none
+       (maximize "obj" (+ (* 3 [x 1])
+                          (* 4 [x 2])))
+       #+end_src
+
+****** add the constraint
+
+       In this model we only have one constraint: x[1] + x[2] <= 3.  In LMML we have an instruction to add constraints: =constraints=.  This instruction receives an identifier and the constraint.  The constraint is an expression that contains a binary comparison.  In this case we have the following:
+
+       #+begin_src lisp :results none
+       (constraint "r1" (<= (+ [x 1] [x 2]) 3))
+       #+end_src
+
+****** add everything to the model
+
+       Finally, we add all the elements to the problem and we get the following:
+
+       #+begin_src lisp :results none  :tangle src/tutorial4.lisp
+       (problem tutorial4-problem
+                "Example 4 for LMML tutorial with sets and index-at"
+
+                (set I :value {1 2})
+
+                (variable-declaration x :domain {I})
+
+                (maximize "obj" (+ (* 3 [x 1]) (* 4 [x 2])))
+
+                (constraint "r1" (<= (+ [x 1] [x 2]) 3)))
+       #+end_src
+
+****** export the problem to GMPL (and solve it)
+
+       Once we have defined the problem, we can export it to any of the languages defined in LMML.  At the time of writing this tutorial the only defined language is GMPL, so we are going to export the problem to that language.
+
+       Right now, we have stored the AST of the problem in the variable =tutorial4-problem=.
+
+       We can export it to any (defined) language with the following line:
+
+       #+begin_src lisp :results output  :tangle src/tutorial1.lisp
+       (generate-code tutorial4-problem gmpl t)
+       #+end_src
+
+       #+RESULTS:
+       #+begin_example
+       /*Problem Example 4 for LMML tutorial with sets and index-at*/
+
+
+       set I := {1,2};
+
+       var x {i in I}, >= 0;
+
+       maximize obj: 3*x[1] + 4*x[2];
+
+       s.t. r1: x[1] + x[2] <= 3;
+
+       end;
+       #+end_example
+
+       The function =generate-code= receives the AST we want to export, the language we want to export to, and a stream: in this case, the stream is t (the standard output).
+
+       Had we wanted to write the model to a file, we could have done the following:
+
+       #+begin_src lisp :results none
+       (WITH-OPEN-FILE (f "/tmp/lmml/tutorial4.mod"
+                          :DIRECTION :OUTPUT
+                          :IF-EXISTS :SUPERSEDE)
+
+         (generate-code tutorial4-problem gmpl f))
+       #+end_src
+
+       Note that the instruction =WITH-OPEN-FILE= is written in uppercase letters as well as the keywords =:DIRECTION=, =:OUTPUT=, =:IF-EXISTS=, and =:SUPERSEDE=.  This is also because of the call to =(turn-on-case-sensitivity)=.  The reason is that there is not lowercase version that macro nor it's keywords.
+
+       We didn't have to 'uppercase' the function or arguments in
+
+       =(generate-code tutorial4-problem gmpl t)=
+
+       because there are lowercase version of the function =GENERATE-CODE=, as well as the symbols =GMPL= and =T=.
+
+       After the previous code is executed, the model is written to the file "/tmp/lmml/tutorial4.mod".  You should change that path to a correct one on your machine.
+
+       To make sure it all worked as expected, we can call the program glpsol on our generated file like this:
+
+       #+begin_src sh :results output
+       glpsol -m /tmp/lmml/tutorial4.mod
+       #+end_src
+
+       #+RESULTS:
+       #+begin_example
+       GLPSOL: GLPK LP/MIP Solver, v4.57
+       Parameter(s) specified in the command line:
+        -m /tmp/lmml/tutorial4.mod
+       Reading model section from /tmp/lmml/tutorial4.mod...
+       12 lines were read
+       Generating obj...
+       Generating r1...
+       Model has been successfully generated
+       GLPK Simplex Optimizer, v4.57
+       2 rows, 2 columns, 4 non-zeros
+       Preprocessing...
+       1 row, 2 columns, 2 non-zeros
+       Scaling...
+        A: min|aij| =  1.000e+00  max|aij| =  1.000e+00  ratio =  1.000e+00
+       Problem data seem to be well scaled
+       Constructing initial basis...
+       Size of triangular part is 1
+       ,*     0: obj =  -0.000000000e+00 inf =   0.000e+00 (2)
+       ,*     1: obj =   1.200000000e+01 inf =   0.000e+00 (0)
+       OPTIMAL LP SOLUTION FOUND
+       Time used:   0.0 secs
+       Memory used: 0.1 Mb (118324 bytes)
+       #+end_example
+
+       That output from glpsol means that the model was correctly created and solved.
+
+****** make the Lisp system case insensitive again
+       Finally, we should make the lisp system case insensitive again. 
+
+       To make the Lisp system case insensitive again, we use the function =(turn-off-case-sensitivity)=, like this:
+
+       #+begin_src lisp :results result :tangle src/tutorial4.lisp
+       (turn-off-case-sensitivity)
+       #+end_src
+
+       #+RESULTS:
+       : :UPCASE
+
+       And that's all :-D
+
+****** conclusion
+
+       Congratulations!  You have just finished another LMML tutorial, and now you can write models with parameters, sets, and indexed variables :-o.  In the next tutorial we'll write a model where we use summations.
+**** Model with sums
+***** Description
+      This tutorial is an introduction on how to use the sum operator to iterate over sets.
+
+       This tutorial assumes that the user has basic lisp knowledge and that she is using Emacs.  
+***** Getting the files
+
+      The first step is to get the files.  If you are reading this, you probably received a zipped file with several files, but the only necessary files are
+
+      - lmml.org
+      - lmml-case-sensitive.org
+      - gagm.lisp
+
+      At the time of writing this, the only way to get the files is to receive them by mail ;-).  It is unlikely that that changes in a near future.  Anyway, you can write to fernan@matcom.uh.cu and request a copy of the files.  If you want, you can write the email in spanish :-P.  
+***** Setting up an appropriate file system
+
+      Once you have the files, you should copy them to a folder.  In my case, this folder will be /tmp/lmml/
+
+      On that folder you should create a folder src.
+
+      On the terminal you can do that with:
+
+      #+begin_src sh
+      mkdir src
+      #+end_src
+
+      We also need to create a folder called tests.
+
+      #+begin_src sh
+      mkdir tests
+      #+end_src
+     
+
+      At this point, you should have the following structure on your folder
+
+      #+begin_src sh
+      ls /tmp/lmml
+      #+end_src
+
+      #+RESULTS:
+      | gagm.lisp               |
+      | lmml-case-sensitive.org |
+      | lmml.org                |
+      | src                     |
+      | tests                   |
+
+      Now, we only need one more step: move the file =gagm.lisp= to the folder =src=:
+
+      #+begin_src sh
+      mv gagm.lips src/
+      #+end_src
+     
+      After that operation, we get a folder with the following structure:
+
+      #+begin_src sh
+      ls /tmp/lmml
+      #+end_src
+
+      #+RESULTS:
+      | lmml-case-sensitive.org |
+      | lmml.org                |
+      | src                     |
+      | tests                   |
+     
+
+      Once this is done, we can create the source files to start working with the models.
+***** Creating the source files
+
+      The next step is to create the source files.  To do that, we'll use the Emacs function org-babel-tangle, as shown in the following steps.
+
+      1. Load the file lmml.org in Emacs
+      2. Tangle the file (M-x org-babel-tangle)
+
+         If you get an error at this point, make sure that both folders exists (src and tests).
+      3. Load the file lmml-case-sensitive.org in Emacs
+      4. Tangle the file (M-x org-babel-tangle)
+         If you get an error at this point, make sure that both folders exists (src and tests).        
+
+      After this, we are ready to start the Lisp and load the source code.
+
+      Note: After tangling the file lmml.org, a file named =emacs-utils.el= will appear on the folder.  That's OK.  That file is used to make it easier to work with the system in Emacs, but that's probably useful only to Fernando :-/.
+***** Load the system into the Lisp image
+
+      1. Start Lisp
+
+         To load the system, we need to start lisp.  In Emacs you can do this by typing =M-x slime=.
+
+      2. Set the working directory
+
+         After starting the Lisp, we need to set the working directory to the folder were we tangled the files.  In my case that folder is =/tmp/lmml/=.  In Emacs you can do that by typing =,= in the REPL, then =cd=, and then type the directory.
+
+      3. Load the files
+
+         Once the directory is set, we can load the system loading the file =src/load-files.lisp=:
+
+         #+begin_src lisp :results output
+         (load "src/load-lmml.lisp")
+         #+end_src
+
+         If everything worked fine, you should see in the REPL something like this:
+     
+         #+RESULTS:
+         #+begin_example
+         Loading src/gagm.lisp ........................... OK
+         Loading src/package.lisp ........................ OK
+         Loading src/generic-functions.lisp .............. OK
+         Loading src/utilities.lisp ...................... OK
+         Loading src/macros.lisp ......................... OK
+         Loading src/reader-macros.lisp .................. OK
+         Loading src/infix-to-prefix.lisp ................ OK
+         Loading src/ast-nodes.lisp ...................... OK
+         Loading src/basic-language.lisp ................. OK
+         Loading src/code-generation-utils.lisp .......... OK
+         Loading src/problem-examples.lisp ............... OK
+         Loading src/writer-gmpl.lisp .................... OK
+         Loading src/lmml-case-sensitivity.lisp .......... OK
+         #+end_example
+
+      4. Change to the package LMML
+
+         The last step to set up the system is to change to the package LMML.  That can be done with:
+
+         #+begin_src lisp :results value
+         (in-package :LMML)
+         #+end_src
+
+         #+RESULTS:
+         : #<PACKAGE "LMML">
+
+         If that worked (and if you are working on Emacs with slime) the prompt in the REPL should have changed to =LMML>=.
+
+      After these steps, we are ready to start writing our first model.  We'll do that on the next section.
+***** Model with summations
+****** introduction
+       In this tutorial we use LMML to create an optimization model with a set and indexed variables.  
+
+       The model is:
+
+       set I
+
+       Variable:  x[i] i in I
+       parameter: c[i] i in I 
+
+       max  sum_{i in I} c[i] * x[i]
+
+       s.t.
+
+          sum_{i in I} x[i] <= 3
+
+       x[i] >= 0 forall i in I
+
+
+       The new elements in this model are the sum operator, and the indexed parameters.
+
+****** create a new file
+       The first step is te create a new file.  I'll name it "tutorial5.lisp".
+****** add the package
+
+       In the new file, we need to specify that we are working on the package LMML.  We do that by adding the following line to the beginning of the file.
+
+       #+begin_src lisp :results none :tangle src/tutorial5.lisp
+       (in-package :lmml)
+       #+end_src
+
+****** make the system case sensitive
+
+       We'll make the system case sensitive.
+
+       Remember that many of the errors you can get from now on is due to the fact that the functions exists only in the uppercase version.  For instance, the function =(exit)= won't exist anymore :-o.  If you want to use that function (or any other function) you'll need to use the uppercase version, like =(EXIT)= in this case..
+
+       With that in mind, let's make LMML case-sensitive.  That is done with the function
+
+       #+begin_src lisp :results result :tangle src/tutorial5.lisp
+       (turn-on-case-sensitivity)
+       #+end_src
+
+       #+RESULTS:
+       : :PRESERVE
+
+****** declare the problem
+
+       The next step is to create a problem.  A problem requires at least 3 parameters:
+
+        - a symbol (where we'll store the problem),
+        - a string (with a descriptive name for the problem), and
+        - the instructions, that can be any number of instructions.
+
+       First, let's create a problem with the id and the name.
+
+       #+begin_src lisp :results none
+       (problem tutorial5-problem
+                "Example problem for the tutorial.  This one has sums and indexed parameters.")
+       #+end_src
+
+****** add the set
+       The first thing is to add the set.  That is done with the instruction =set=.  The instruction =set= receives a symbol as in 
+
+       #+begin_src lisp :results none
+       (set I)
+       #+end_src
+
+****** add the variables
+       In this model, instead of having two variables, we'll have only one, but indexed in the set I.  To do that, we use the instruction =variable-declaration=, and declare the domain of the variable with the keyword =:domain=.
+
+       The argument of the keyword =:domain= should be a list with the sets in which the variable should be indexed.  In this case, we have only one index (I), so we could write =:domain {I}=.
+
+       #+begin_src lisp :results none
+       (variable-declaration x :domain {I})
+       #+end_src
+
+       That means to create a variable named =x= and indexed on the set =I=.
+
+       If the variable were y[i,j], with i and j in I, we could write:
+
+       #+begin_src lisp :results none
+       (variable-declaration y :domain {I I})
+       #+end_src
+****** add the parameter
+       In this we'll have a parameter =c=, that is indexed in the set I.  We can declare that with the instruction =parameter=.  To indicate that the parameter is indexed, we use the keyword =:domain= and specify a list with the sets where the parameter is indexed.
+
+       In the case of this tutorial, the parameter is indexed in only one parameter (I), so we can write it as:
+
+       #+begin_src lisp :results none
+       (parameter c :domain {I})
+       #+end_src
+
+       And that's enough te declare an indexed parameter.  (If the parameter were indexed in more than one set, we could use a list of elements as in =(parameter c :domain {I J K})=.)
+
+****** accessing the elements of an indexed variable or parameter
+
+       We can access the elements of an indexed variable or parameter with the instruction =index-at=.  The function =index-at= receives a symbol representing a variable and an expression that will be computed to get the index.  The symbol can be a parameter or a variable.
+
+       For instance, to access the 1st element of x we write:
+
+       #+begin_src lisp :results none
+       (index-at x 1)
+       #+end_src
+
+       To access the 3rd element of the parameter =c= we could write:
+
+       #+begin_src lisp :results none
+       (index-at c 3)
+       #+end_src
+
+       or
+
+       #+begin_src lisp :results none
+       (index-at c (+ 1 2))
+       #+end_src
+       
+       In both cases we get the same result.
+
+       However, if we write =index-at= everytime we want to access an element of a variable or a parameter, the model could get difficult to read :-(.  To avoid that we can use the symbols [ and ] as =[x 1]= and that's equivalent to =(index-at x 1)=.  =[c 1 3 4]= is equivalent to =(index-at c 1 3 4)=.
+
+       From now on, every time we want to access an element of an indexed variable or parameter, we'll use the [-] syntax.
+
+****** add the objective function
+
+       The objective function for this problem is
+
+       c[1] * x[1] + c[2] * x[2],
+
+       and we want to maximize it.
+
+       Using the [-] syntax we can write that objective function as:
+
+       #+begin_src lisp :results none
+       (maximize "obj" (+ (* [c 1] [x 1])
+                          (* [c 2] [x 2])))
+       #+end_src
+
+****** add the objective function with the sum operator
+
+       However, we could rewrite the objective function for this problem as
+
+       sum_{i in I} c[i] * x[i],
+
+       and we get a more concise representation.  
+
+       We can do the same in LMML using =sumf= operator.  We are using =sumf= and not =sum= because probably that's not the final syntax and functionality for that operation.
+
+       The syntax of the sum operator is:
+
+       #+begin_src lisp :results none
+       (sumf ((sum_range_spec_1)
+             (sum_range_spec_2)
+             ...
+             (sum_range_spec_n))
+
+         expr)
+       #+end_src
+
+       expr is the algebraic expression that should be summed over.  In the case of the example in this tutorial it would be =(* [c i] [x i])=.
+
+       sum_range_spec_i can be any of the following forms:
+
+       - (var-name in set-name)
+       - (var-name from min_value to max_value)
+       - any comparison operation
+
+       In the first case =var-name= is a symbol representing the name of a variable and set-name is a symbol that was previously defined as a set.
+
+       For instance, in the example of this tutorial we could write:
+
+       =(sumf ((i in I)) (* [c i] [x i]))=.
+
+      In the second case, var name is also a symbol representing the name of a variable, min_value is a number and max_value is another number.
+
+      In the example we've been using in this tutorial we could write:
+
+      =(sumf ((i from 1 to 2)) (* [c i] [x i]))=.
+
+      sum_range_spec_i can also be a binary comparison.  This allows us to create sums as =(sumf ((i in I) (< i 5)) (* [c i] [x i]))=.  That means to iterate through all the elements in =I= that also are smaller than 5.
+
+      In LMML you can use any of the sum_range_specification, but you should have in mind that the backend you are going to use can handle it.  For instance, from those three examples, the only one that we can use in GMPL is the first one :-(.  However, the user is free to use any of them ;-).
+
+      Using this notation, we can write our objective function as:
+
+       #+begin_src lisp :results none
+       (maximize "obj" (sumf ((i in I)) (* [c i] [x i])))
+       #+end_src
+
+****** add the constraint
+
+       In this model we only have one constraint:
+
+       sum_(i in I) x[i] <= 3.
+
+       We can translate that to LMML as shown below:
+
+       #+begin_src lisp :results none
+       (constraint "r1" (<= (sumf ((i in I)) [x i]) 3))
+       #+end_src
+
+****** add everything to the model
+
+       Finally, we add all the elements to the problem and we get the following:
+
+       #+begin_src lisp :results none  :tangle src/tutorial5.lisp
+       (problem tutorial5-problem
+                "Example 5 for LMML tutorial with sums and indexed parameters."
+
+                (set I :value {1 2})
+
+                (parameter c :domain {I} :value {1 2})
+
+                (variable-declaration x :domain {I})
+
+                (maximize "obj" (sumf ((i in I)) (* [c i] [x i])))
+
+                (constraint "r1" (<= (sumf ((i in I)) [x i]) 3)))
+       #+end_src
+
+****** export the problem to GMPL
+
+       Once we have defined the problem, we can export it to any of the languages defined in LMML.  At the time of writing this tutorial the only defined language is GMPL, so we are going to export the problem to that language.
+
+       Right now, we have stored the AST of the problem in the variable =tutorial5-problem=.
+
+       We can export it to any (defined) language with the following line:
+
+       #+begin_src lisp :results output  :tangle src/tutorial1.lisp
+       (generate-code tutorial5-problem gmpl t)
+       #+end_src
+
+       #+RESULTS:
+       #+begin_example
+       /*Problem Example 5 for LMML tutorial with sums and indexed parameters.*/
+       
+       
+       set I;
+       
+       param c {i in I};
+       
+       var x {i in I}, >= 0;
+       
+       maximize obj: sum {i in I} c[i]*x[i];
+       
+       s.t. r1: sum {i in I} x[i] <= 3;
+       
+       end;
+       #+end_example
+
+       The function =generate-code= receives the AST we want to export, the language we want to export to, and a stream: in this case, the stream is t (the standard output).
+
+       Had we wanted to write the model to a file, we could have done the following:
+
+       #+begin_src lisp :results none
+       (WITH-OPEN-FILE (f "/tmp/lmml/tutorial5.mod"
+                          :DIRECTION :OUTPUT
+                          :IF-EXISTS :SUPERSEDE)
+
+         (generate-code tutorial5-problem gmpl f))
+       #+end_src
+
+       Note that the instruction =WITH-OPEN-FILE= is written in uppercase letters as well as the keywords =:DIRECTION=, =:OUTPUT=, =:IF-EXISTS=, and =:SUPERSEDE=.  This is also because of the call to =(turn-on-case-sensitivity)=.  The reason is that there is not lowercase version that macro nor it's keywords.
+
+       We didn't have to 'uppercase' the function or arguments in
+
+       =(generate-code tutorial5-problem gmpl t)=
+
+       because there are lowercase version of the function =GENERATE-CODE=, as well as the symbols =GMPL= and =T=.
+
+       After the previous code is executed, the model is written to the file "/tmp/lmml/tutorial5.mod".  You should change that path to a correct one on your machine.
+
+       In this case, we can't solve the problem (yet) because we haven't defined the value of the parameters.  That can be done with a =data-section=, of which we are going to talk in the last tutorial.  If you want, you can take a look at that tutorial and solve this model ;-).
+
+****** make the Lisp system case insensitive again
+       Finally, we should make the lisp system case insensitive again. 
+
+       To make the Lisp system case insensitive again, we use the function =(turn-off-case-sensitivity)=, like this:
+
+       #+begin_src lisp :results result :tangle src/tutorial5.lisp
+       (turn-off-case-sensitivity)
+       #+end_src
+
+       #+RESULTS:
+       : :UPCASE
+
+       And that's all :-D
+       
+****** conclusion
+
+       Congratulations!  You have just finished another LMML tutorial, and now you can write models with indexed parameters, sets, and the sumf operator :-D.  In the next tutorial we'll write a model where we use summations the forall statement.
+
+**** Model with forall quantifier
+***** Description
+      This tutorial is an introduction on how to use the sum operator to iterate over sets.
+
+       This tutorial assumes that the user has basic lisp knowledge and that she is using Emacs.  
+***** Getting the files
+
+      The first step is to get the files.  If you are reading this, you probably received a zipped file with several files, but the only necessary files are
+
+      - lmml.org
+      - lmml-case-sensitive.org
+      - gagm.lisp
+
+      At the time of writing this, the only way to get the files is to receive them by mail ;-).  It is unlikely that that changes in a near future.  Anyway, you can write to fernan@matcom.uh.cu and request a copy of the files.  If you want, you can write the email in spanish :-P.  
+***** Setting up an appropriate file system
+
+      Once you have the files, you should copy them to a folder.  In my case, this folder will be /tmp/lmml/
+
+      On that folder you should create a folder src.
+
+      On the terminal you can do that with:
+
+      #+begin_src sh
+      mkdir src
+      #+end_src
+
+      We also need to create a folder called tests.
+
+      #+begin_src sh
+      mkdir tests
+      #+end_src
+     
+
+      At this point, you should have the following structure on your folder
+
+      #+begin_src sh
+      ls /tmp/lmml
+      #+end_src
+
+      #+RESULTS:
+      | gagm.lisp               |
+      | lmml-case-sensitive.org |
+      | lmml.org                |
+      | src                     |
+      | tests                   |
+
+      Now, we only need one more step: move the file =gagm.lisp= to the folder =src=:
+
+      #+begin_src sh
+      mv gagm.lips src/
+      #+end_src
+     
+      After that operation, we get a folder with the following structure:
+
+      #+begin_src sh
+      ls /tmp/lmml
+      #+end_src
+
+      #+RESULTS:
+      | lmml-case-sensitive.org |
+      | lmml.org                |
+      | src                     |
+      | tests                   |
+     
+
+      Once this is done, we can create the source files to start working with the models.
+***** Creating the source files
+
+      The next step is to create the source files.  To do that, we'll use the Emacs function org-babel-tangle, as shown in the following steps.
+
+      1. Load the file lmml.org in Emacs
+      2. Tangle the file (M-x org-babel-tangle)
+
+         If you get an error at this point, make sure that both folders exists (src and tests).
+      3. Load the file lmml-case-sensitive.org in Emacs
+      4. Tangle the file (M-x org-babel-tangle)
+         If you get an error at this point, make sure that both folders exists (src and tests).        
+
+      After this, we are ready to start the Lisp and load the source code.
+
+      Note: After tangling the file lmml.org, a file named =emacs-utils.el= will appear on the folder.  That's OK.  That file is used to make it easier to work with the system in Emacs, but that's probably useful only to Fernando :-/.
+***** Load the system into the Lisp image
+
+      1. Start Lisp
+
+         To load the system, we need to start lisp.  In Emacs you can do this by typing =M-x slime=.
+
+      2. Set the working directory
+
+         After starting the Lisp, we need to set the working directory to the folder were we tangled the files.  In my case that folder is =/tmp/lmml/=.  In Emacs you can do that by typing =,= in the REPL, then =cd=, and then type the directory.
+
+      3. Load the files
+
+         Once the directory is set, we can load the system loading the file =src/load-files.lisp=:
+
+         #+begin_src lisp :results output
+         (load "src/load-lmml.lisp")
+         #+end_src
+
+         If everything worked fine, you should see in the REPL something like this:
+     
+         #+RESULTS:
+         #+begin_example
+         Loading src/gagm.lisp ........................... OK
+         Loading src/package.lisp ........................ OK
+         Loading src/generic-functions.lisp .............. OK
+         Loading src/utilities.lisp ...................... OK
+         Loading src/macros.lisp ......................... OK
+         Loading src/reader-macros.lisp .................. OK
+         Loading src/infix-to-prefix.lisp ................ OK
+         Loading src/ast-nodes.lisp ...................... OK
+         Loading src/basic-language.lisp ................. OK
+         Loading src/code-generation-utils.lisp .......... OK
+         Loading src/problem-examples.lisp ............... OK
+         Loading src/writer-gmpl.lisp .................... OK
+         Loading src/lmml-case-sensitivity.lisp .......... OK
+         #+end_example
+
+      4. Change to the package LMML
+
+         The last step to set up the system is to change to the package LMML.  That can be done with:
+
+         #+begin_src lisp :results value
+         (in-package :LMML)
+         #+end_src
+
+         #+RESULTS:
+         : #<PACKAGE "LMML">
+
+         If that worked (and if you are working on Emacs with slime) the prompt in the REPL should have changed to =LMML>=.
+
+      After these steps, we are ready to start writing our first model.  We'll do that on the next section.
+***** Model with summations
+      In this tutorial we use LMML to create an optimization model with the forall quantifier.  To do that, we'll use an assignment model:
+
+      set I = {1,2,3}
+
+      Binary Variable:  x[i,j] i in I, j in I
+      parameter: c[i,j] i in I, j in I
+
+      max  sum_{i in I} c[i] * x[i]
+
+      s.t.
+
+         sum_{i in I} x[i,j] = 1, forall j in I
+
+         sum_{j in I} x[i,j] = 1, forall i in I
+
+      x[i,j] in {0,1} forall i in I, j in I.
+
+
+      The new element in this model is the forall quantifier.
+
+****** create a new file
+       The first step is te create a new file.  I'll name it "tutorial6.lisp".
+****** add the package
+       
+       In the new file, we need to specify that we are working on the package LMML.  We do that by adding the following line to the beginning of the file.
+
+       #+begin_src lisp :results none :tangle src/tutorial6.lisp
+       (in-package :lmml)
+       #+end_src
+
+****** make the system case sensitive
+
+       We'll make the system case sensitive.
+
+       Remember that many of the errors you can get from now on is due to the fact that the functions exists only in the uppercase version.  For instance, the function =(exit)= won't exist anymore :-o.  If you want to use that function (or any other function) you'll need to use the uppercase version, like =(EXIT)= in this case..
+
+       With that in mind, let's make LMML case-sensitive.  That is done with the function
+
+       #+begin_src lisp :results result :tangle src/tutorial6.lisp
+       (turn-on-case-sensitivity)
+       #+end_src
+
+       #+RESULTS:
+       : :PRESERVE
+
+****** declare the problem
+
+       The next step is to create a problem.  A problem requires at least 3 parameters:
+
+        - a symbol (where we'll store the problem),
+        - a string (with a descriptive name for the problem), and
+        - the instructions, that can be any number of instructions.
+
+       First, let's create a problem with the id and the name.
+
+       #+begin_src lisp :results none
+       (problem tutorial6-problem
+                "Example problem for the tutorial.  This one has the forall quantifier.")
+       #+end_src
+
+****** add the set
+       The first thing is to add the set.  That is done with the instruction =set=.  The instruction =set= receives a symbol as in 
+
+       #+begin_src lisp :results none
+       (set I)
+       #+end_src
+
+       In this model we won't declare values for the set or the parameters, as we are going to leave the model generic.
+
+****** add the variables
+       In this model, we'll have one binary variable =x= with two indexes, both in the set =I=. To declare the indexes, we use the keyword =:domain= in the =variable-declaration=.  To specify that the variable is binary we use the keyword =:var-type=, and the value =binary-variable=.
+
+       The argument of the keyword =:domain= should be a list with the sets in which the variable should be indexed.  In this case, we have two indexes but both of them are on the same set =I=.  We write that as =:domain {I I}=.
+
+       #+begin_src lisp :results none
+       (variable-declaration x :domain {I I} :var-type binary-variable)
+       #+end_src
+
+       That means to create a binary variable named =x= that has two indexes, both of them on the set =I=.
+
+****** add the parameter
+       In this we'll have a parameter =c=, that has two indexes, both of them in the set =I=.  We can declare that with the instruction =parameter=.  To indicate that the parameter is indexed, we use the keyword =:domain= and specify a list with the sets where the parameter is indexed.
+
+       #+begin_src lisp :results none
+       (parameter c :domain {I I})
+       #+end_src
+
+****** accessing the elements of an indexed variable or parameter
+
+       We can access the elements of an indexed variable or parameter with the instruction =index-at=.  The function =index-at= receives a symbol representing a variable and an expression that will be computed to get the index.  The symbol can be a parameter or a variable.
+
+       For instance, to access the 1st element of x we write:
+
+       #+begin_src lisp :results none
+       (index-at x 1)
+       #+end_src
+
+       To access the 3rd element of the parameter =c= we could write:
+
+       #+begin_src lisp :results none
+       (index-at c 3)
+       #+end_src
+
+       or
+
+       #+begin_src lisp :results none
+       (index-at c (+ 1 2))
+       #+end_src
+       
+       In both cases we get the same result.
+
+       The function =(index-at)= receives a first positional argument and a &rest for the indices so the number of indices a parameter (or variable) has doesn't have to be known in advance.
+
+       However, if we write =index-at= everytime we want to access an element of a variable or a parameter, the model could get difficult to read :-(.  To avoid that we can use the symbols [ and ] as =[x 1]= and that's equivalent to =(index-at x 1)=.  =[c 1 3 4]= is equivalent to =(index-at c 1 3 4)=.
+
+       As in the other tutorials, every time we want to access an element of an indexed variable or parameter, we'll use the [-] syntax.
+
+****** add the objective function
+
+       The objective function for this problem is
+
+       sum_{i in I, j in I} {c[i] * x[i]}
+
+       and we want to minimize it.
+
+       Using the [-] syntax, and the sum operator we can write that objective function as:
+
+       #+begin_src lisp :results none
+       (minimize "obj" (sum ((i in I) (j in I)) (* [c i] [x i])))
+       #+end_src
+
+****** add the constraints
+
+       In this model we only have two constraints:
+
+       sum_(i in I) x[i, j] = 1, forall j in I, and
+       
+       sum_(j in I) x[i, j] = 1, forall i in I.
+
+       The first part of the constraint is the same as in the previous tutorial, the only different thing is the forall quantifier.  We can add that with the instruction =(forall-quantifier)=.
+
+       The =forall-quantifier= receives two symbols: the name of a variable and the name of the set.  In the case of the first constraint in the tutorial it can be written as: =(for-all-quantifier j I)=.
+
+       The forall-quantifier in the second constraint can be written as =(for-all-quantifier i I)=.
+
+       Now, the =for-all-quantifier= can be added to the constraint using the keyword :quantifiers and then passing a list.
+
+       For instance, the code for both constraints is:
+
+       #+begin_src lisp :results none
+       (constraint "r1" (= (sumf ((i in I)) [x i j]) 1)
+                        :quantifiers ((for-all-quantifier j I)))
+
+       (constraint "r2" (= (sumf ((j in I)) [x i j]) 1)
+                        :quantifiers ((for-all-quantifier i I)))
+       #+end_src
+
+****** comment on the constraints and forall quantifiers
+
+       In some models we may need to have several quantifiers in the same constraint.  For instance, we could have something like:
+
+       sum_{i in I} x[i,j,k] = 1, forall j in J, for k in K, j >= k.
+
+       In that case we should create an instance of =(for-all-quantifier)= for each of the conditions.  In the case of the last one, we just add a comparison operator as in:
+
+       #+begin_src lisp :results none
+       (constraint "r1" (= (sumf ((i in I)) [x i j k]) 1)
+                   :quantifiers ((for-all-quantifier j J)
+                                 (for-all-quantifier k K)
+                                 (>= j k))
+       #+end_src
+
+       Note: The fact that we are using an "ugly" name such as =for-all-quantifier= means that probably that's not the final version in the API, but it should be stable for a while ;-).
+
+       As with everything else in LMML, if you decide to use the quantifiers, you should take into account whether or not the backend supports it.  In the case of GMPL, the only allowed quantifier (so far) is the =for-all-quantifier=.
+
+****** add everything to the model
+
+Finally, we add all the elements to the problem and we get the following:
+
+       #+begin_src lisp :results none  :tangle src/tutorial6.lisp
+       (problem tutorial6-problem
+                "Example 6 for LMML tutorial with for all quantifiers"
+
+                (set I)
+
+                (variable-declaration x :domain {I I} :var-type binary-variable)
+
+                (parameter c :domain {I I})
+
+                (minimize "obj" (sumf ((i in I) (j in I))
+                                      (* [c i] [x i])))
+
+                (constraint "r1" (= (sumf ((i in I)) [x i j]) 1)
+                            :quantifiers ((for-all-quantifier j I)))
+
+                (constraint "r2" (= (sumf ((j in I)) [x i j]) 1)
+                            :quantifiers ((for-all-quantifier i I))))
+       #+end_src
+
+****** export the problem to GMPL 
+
+       Once we have defined the problem, we can export it to any of the languages defined in LMML.  At the time of writing this tutorial the only defined language is GMPL, so we are going to export the problem to that language.
+
+       Right now, we have stored the AST of the problem in the variable =tutorial6-problem=.
+
+       We can export it to any (defined) language with the following line:
+
+       #+begin_src lisp :results output  :tangle src/tutorial1.lisp
+       (generate-code tutorial6-problem gmpl t)
+       #+end_src
+
+       #+RESULTS:
+       #+begin_example
+       /*Problem Example 6 for LMML tutorial with for all quantifiers*/
+       
+       
+       set I;
+       
+       var x {i in I, j in I}, binary, >= 0;
+       
+       param c {i in I, j in I};
+       
+       minimize obj: sum {i in I, j in I} c[i]*x[i];
+       
+       s.t. r1 {j in I}: sum {i in I} x[i, j] = 1;
+       
+       s.t. r2 {i in I}: sum {j in I} x[i, j] = 1;
+       
+       end;
+       #+end_example
+
+       The function =generate-code= receives the AST we want to export, the language we want to export to, and a stream: in this case, the stream is t (the standard output).
+
+       Had we wanted to write the model to a file, we could have done the following:
+
+       #+begin_src lisp :results none
+       (WITH-OPEN-FILE (f "/tmp/lmml/tutorial5.mod"
+                          :DIRECTION :OUTPUT
+                          :IF-EXISTS :SUPERSEDE)
+
+         (generate-code tutorial6-problem gmpl f))
+       #+end_src
+
+       Note that the instruction =WITH-OPEN-FILE= is written in uppercase letters as well as the keywords =:DIRECTION=, =:OUTPUT=, =:IF-EXISTS=, and =:SUPERSEDE=.  This is also because of the call to =(turn-on-case-sensitivity)=.  The reason is that there is not lowercase version that macro nor it's keywords.
+
+       We didn't have to 'uppercase' the function or arguments in
+
+       =(generate-code tutorial5-problem gmpl t)=
+
+       because there are lowercase version of the function =GENERATE-CODE=, as well as the symbols =GMPL= and =T=.
+
+       After the previous code is executed, the model is written to the file "/tmp/lmml/tutorial6.mod".  You should change that path to a correct one on your machine.
+
+****** make the Lisp system case insensitive again
+       Finally, we should make the lisp system case insensitive again. 
+
+       To make the Lisp system case insensitive again, we use the function =(turn-off-case-sensitivity)=, like this:
+
+       #+begin_src lisp :results result :tangle src/tutorial6.lisp
+       (turn-off-case-sensitivity)
+       #+end_src
+
+       #+RESULTS:
+       : :UPCASE
+
+       And that's all :-D
+       
+****** conclusion
+
+       Congratulations!  Now you know how to add quantifiers to a model in LMML.  However, in this tutorial we could not test the solution of the problem because there is no data in that model.  In the next tutorial we'll see how to add data to the parameters in the model.
+
+**** Model with data section
+***** Description
+      This tutorial is an introduction on how to use the data section in a model specification.  This section allows the separation of model and data, which is a good thing.
+
+       This tutorial assumes that the user has basic lisp knowledge and that she is using Emacs.  
+***** Getting the files
+
+      The first step is to get the files.  If you are reading this, you probably received a zipped file with several files, but the only necessary files are
+
+      - lmml.org
+      - lmml-case-sensitive.org
+      - gagm.lisp
+
+      At the time of writing this, the only way to get the files is to receive them by mail ;-).  It is unlikely that that changes in a near future.  Anyway, you can write to fernan@matcom.uh.cu and request a copy of the files.  If you want, you can write the email in spanish :-P.  
+***** Setting up an appropriate file system
+
+      Once you have the files, you should copy them to a folder.  In my case, this folder will be /tmp/lmml/
+
+      On that folder you should create a folder src.
+
+      On the terminal you can do that with:
+
+      #+begin_src sh
+      mkdir src
+      #+end_src
+
+      We also need to create a folder called tests.
+
+      #+begin_src sh
+      mkdir tests
+      #+end_src
+     
+
+      At this point, you should have the following structure on your folder
+
+      #+begin_src sh
+      ls /tmp/lmml
+      #+end_src
+
+      #+RESULTS:
+      | gagm.lisp               |
+      | lmml-case-sensitive.org |
+      | lmml.org                |
+      | src                     |
+      | tests                   |
+
+      Now, we only need one more step: move the file =gagm.lisp= to the folder =src=:
+
+      #+begin_src sh
+      mv gagm.lips src/
+      #+end_src
+     
+      After that operation, we get a folder with the following structure:
+
+      #+begin_src sh
+      ls /tmp/lmml
+      #+end_src
+
+      #+RESULTS:
+      | lmml-case-sensitive.org |
+      | lmml.org                |
+      | src                     |
+      | tests                   |
+     
+
+      Once this is done, we can create the source files to start working with the models.
+***** Creating the source files
+
+      The next step is to create the source files.  To do that, we'll use the Emacs function org-babel-tangle, as shown in the following steps.
+
+      1. Load the file lmml.org in Emacs
+      2. Tangle the file (M-x org-babel-tangle)
+
+         If you get an error at this point, make sure that both folders exists (src and tests).
+      3. Load the file lmml-case-sensitive.org in Emacs
+      4. Tangle the file (M-x org-babel-tangle)
+         If you get an error at this point, make sure that both folders exists (src and tests).        
+
+      After this, we are ready to start the Lisp and load the source code.
+
+      Note: After tangling the file lmml.org, a file named =emacs-utils.el= will appear on the folder.  That's OK.  That file is used to make it easier to work with the system in Emacs, but that's probably useful only to Fernando :-/.
+***** Load the system into the Lisp image
+
+      1. Start Lisp
+
+         To load the system, we need to start lisp.  In Emacs you can do this by typing =M-x slime=.
+
+      2. Set the working directory
+
+         After starting the Lisp, we need to set the working directory to the folder were we tangled the files.  In my case that folder is =/tmp/lmml/=.  In Emacs you can do that by typing =,= in the REPL, then =cd=, and then type the directory.
+
+      3. Load the files
+
+         Once the directory is set, we can load the system loading the file =src/load-files.lisp=:
+
+         #+begin_src lisp :results output
+         (load "src/load-lmml.lisp")
+         #+end_src
+
+         If everything worked fine, you should see in the REPL something like this:
+     
+         #+RESULTS:
+         #+begin_example
+         Loading src/gagm.lisp ........................... OK
+         Loading src/package.lisp ........................ OK
+         Loading src/generic-functions.lisp .............. OK
+         Loading src/utilities.lisp ...................... OK
+         Loading src/macros.lisp ......................... OK
+         Loading src/reader-macros.lisp .................. OK
+         Loading src/infix-to-prefix.lisp ................ OK
+         Loading src/ast-nodes.lisp ...................... OK
+         Loading src/basic-language.lisp ................. OK
+         Loading src/code-generation-utils.lisp .......... OK
+         Loading src/problem-examples.lisp ............... OK
+         Loading src/writer-gmpl.lisp .................... OK
+         Loading src/lmml-case-sensitivity.lisp .......... OK
+         #+end_example
+
+      4. Change to the package LMML
+
+         The last step to set up the system is to change to the package LMML.  That can be done with:
+
+         #+begin_src lisp :results value
+         (in-package :LMML)
+         #+end_src
+
+         #+RESULTS:
+         : #<PACKAGE "LMML">
+
+         If that worked (and if you are working on Emacs with slime) the prompt in the REPL should have changed to =LMML>=.
+
+      After these steps, we are ready to start writing our first model.  We'll do that on the next section.
+***** Model with summations
+****** introduction
+       In this tutorial we use LMML to create an optimization model with a data section.  For that, we'll use a model that has all type of data that can be specify so far.  The model is the following.
+
+       set I
+
+       set J
+
+       Binary Variable:  x[i,j] i in I, j in J
+
+       parameter: d
+
+       parameter: b[i] in I
+
+       parameter: c[i,j] i in I, j in J
+
+       max  sum_{i in I, j in J} c[i,j] * x[i, j]
+
+       s.t.
+
+          sum_{i in I} b[i] * x[i,j] <= d, forall j in I
+
+       x[i,j] in {0,1} forall i in I, j in I.
+
+       And we want to solve it with the following data:
+
+       I = {1,2}
+
+       J = 1..3
+
+       d = 5
+
+       b = {3,4}
+
+       c = (1,2,3
+            3,2,1)
+
+       The new element in this model is that we want to separate the data from the model.  All the elements in the model, have been covered in other tutorials, so we won't spend much time with that, so we can get into the data part
+
+****** create a new file
+       The first step is te create a new file.  I'll name it "tutorial7.lisp".
+****** add the package
+       
+       In the new file, we need to specify that we are working on the package LMML.  We do that by adding the following line to the beginning of the file.
+
+       #+begin_src lisp :results none :tangle src/tutorial7.lisp
+       (in-package :lmml)
+       #+end_src
+
+****** make the system case sensitive
+
+       We'll make the system case sensitive.
+
+       Remember that many of the errors you can get from now on is due to the fact that the functions exists only in the uppercase version.  For instance, the function =(exit)= won't exist anymore :-o.  If you want to use that function (or any other function) you'll need to use the uppercase version, like =(EXIT)= in this case..
+
+       With that in mind, let's make LMML case-sensitive.  That is done with the function
+
+       #+begin_src lisp :results result :tangle src/tutorial7.lisp
+       (turn-on-case-sensitivity)
+       #+end_src
+
+       #+RESULTS:
+       : :PRESERVE
+
+****** write the model
+
+       First, we add all the elements to the model.  Following the instructions in the previous tutorials we get the following.
+
+       #+begin_src lisp :results none  :tangle src/tutorial7.lisp
+       (problem tutorial7-problem
+                "Example 7 for LMML tutorial with for data section"
+
+                (set I)
+
+                (set J)
+
+                (variable-declaration x :domain {I J} :var-type binary-variable)
+
+                (parameter d)
+
+                (parameter b :domain {I})
+
+                (parameter c :domain {I J})
+
+                (minimize "obj" (sumf ((i in I) (j in I))
+                                      (* [c i] [x i])))
+
+                (constraint "r1" (<= (sumf ((i in I)) (* [b i]
+                                                         [x i j]))
+                                     1)
+                            :quantifiers ((for-all-quantifier j J))))
+       #+end_src
+
+****** export the problem to GMPL 
+
+       Once we have defined the problem, we can export it to any of the languages defined in LMML.  At the time of writing this tutorial the only defined language is GMPL, so we are going to export the problem to that language.
+
+       Right now, we have stored the AST of the problem in the variable =tutorial7-problem=.
+
+       We can export it to any (defined) language with the following line:
+
+       #+begin_src lisp :results output  :tangle src/tutorial1.lisp
+       (generate-code tutorial7-problem gmpl t)
+       #+end_src
+
+       #+RESULTS:
+       #+begin_example
+       /*Problem Example 7 for LMML tutorial with for data section*/
+
+
+       set I;
+
+       set J;
+
+       var x {i in I, j in J}, binary, >= 0;
+
+       param d;
+
+       param b {i in I};
+
+       param c {i in I, j in J};
+
+       minimize obj: sum {i in I, j in I} c[i]*x[i];
+
+       s.t. r1 {j in I}: sum {i in I} b[i]*x[i, j] <= 1;
+
+       end;
+       #+end_example
+
+       The function =generate-code= receives the AST we want to export, the language we want to export to, and a stream: in this case, the stream is t (the standard output).
+
+       Had we wanted to write the model to a file, we could have done the following:
+
+       #+begin_src lisp :results none
+       (WITH-OPEN-FILE (f "/tmp/lmml/tutorial5.mod"
+                          :DIRECTION :OUTPUT
+                          :IF-EXISTS :SUPERSEDE)
+
+         (generate-code tutorial7-problem gmpl f))
+       #+end_src
+
+       Note that the instruction =WITH-OPEN-FILE= is written in uppercase letters as well as the keywords =:DIRECTION=, =:OUTPUT=, =:IF-EXISTS=, and =:SUPERSEDE=.  This is also because of the call to =(turn-on-case-sensitivity)=.  The reason is that there is not lowercase version that macro nor it's keywords.
+
+       We didn't have to 'uppercase' the function or arguments in
+
+       =(generate-code tutorial5-problem gmpl t)=
+
+       because there are lowercase version of the function =GENERATE-CODE=, as well as the symbols =GMPL= and =T=.
+
+       After the previous code is executed, the model is written to the file "/tmp/lmml/tutorial7.mod".  You should change that path to a correct one on your machine.
+
+       Now, if we want to solve that problem, we need to provide some data for the parameters.  In LMML that can be done with the section data, and we can deal with that in the following section.
+
+****** the data section
+       In this case we have a model but we don't have the data for the set and parameters in the model.  We can add those with the data section.
+
+       A data section is a section in the model where you can add data for the sets and parameters in the model.
+
+       In this tutorial we'll cover how to add data for the sets, and for the three types of parameter that we can have now on LMML.  Those three types are: scalar, 1d vector, and 2d data matrix.
+
+
+       The syntax for the data section is simple, just
+
+       =(data-section element_1 element_2 ...  element_n)=
+
+       element_i can be any of the instructions =(set-value-of-set)= and =(set-value-of-param)=.
+
+       We'll cover all them in the next sections
+
+****** set-value-of-set
+       This instruction can be used to add data to a set.
+
+       The syntax is: =(set-value-of-set set-name value)=
+
+       set-name is a symbol with the name of a set previously defined, and value should be a list with the elements.
+
+       In the case of the example in this tutorial we have the set =I=, and we want to bind it to the set {1, 2}.
+
+       We can do that with:
+
+       #+begin_src lisp :results none
+       (set-value-of-set I {1 2})
+       #+end_src
+
+       If there were more elements in the set, we just add them to the list.
+
+       In the case of the set =J= we should add elements from 1 to 3:
+
+       #+begin_src lisp :results none
+       (set-value-of-set J {1 2 3})
+       #+end_src
+
+       If we are exporting (at least) to GMPL, the elements of a set does not need necesarily to be a number, it can also be a string :-o.
+
+       In the next section we present how to set the value of a parameter.
+****** set-value-of-param
+       To set the value of a parameter we should use the instruction: =(set-value-of-param)=.
+
+       The syntax is: =(set-value-of-param param-name value)=.
+
+       param-name is the symbol of a parameter that should have been declared previously, and value is the value that the parameter should take.
+
+       Currently, the parameter can have three types of values: a scalar, a vector, or a two dimensional data matrix.  What type of value it should take depends on the definition of the parameter:
+
+       - If the parameter has no domain, then it should be a scalar.
+       - If the parameter is indexed in one set, then it should be a list with as many elements as the cardinality of the set.
+       - If the parameter is indexed in two sets, then in should receive a list of lists, with appropriate lengths according to the sets the parameter is indexed on.
+
+       In this tutorial we'll cover every type of situation.
+
+       In the example we have 3 parameters: =d=, =b=, and =c=.
+
+       From the definition of each, we can see that:
+
+       #+begin_src lisp
+       (parameter d)
+
+       (parameter b :domain {I})
+
+       (parameter c :domain {I J})
+       #+end_src
+
+       =d= is a scalar, =b= is indexed in one set, and =c= is indexed in two sets.
+
+       The simplest case is the scalar case.
+
+       We want the parameter =d= to have the value 5.  We can do that as:
+
+       #+begin_src lisp :results none
+       (set-value-of-param d 5)
+       #+end_src
+
+       and that's all :-D.
+
+       The next case is the =b=, that is indexed in one set, and thus should have a list as the value.  As =b= is indexed in the set =I=, and we set the value =I= to {1,2}, then the value of =b= should be a list with two elements, where the first one correspond to the index 1, and the second, to the index 2 (the values in the set I).
+
+       We can do that as:
+       
+
+       #+begin_src lisp :results none
+       (set-value-of-param b {3 4})
+       #+end_src
+       
+       In this case, we should write explicitly the contents of the value (we can not use the =range=).
+
+       Finally, we have the parameter =c= that is indexed in two sets.  In this case, we need to provide a matrix as a list of lists.  In this case we should provide 2 lists with 3 elements each, because the set =I= has two elements, and =J=, 3.  
+
+       In this case that can be done with:
+
+       #+begin_src lisp :results none
+       (set-value-of-param c '((1 2 3)
+                               (3 2 1)))
+       #+end_src
+       
+       In the next section we add all the elements to the data section.
+       
+****** add all the data to the data section
+       
+       Now that we have defined all the values for all the parameters, we create the =data-section= like this:
+
+       #+begin_src lisp :results none
+       (data-section
+        (set-value-of-set I {1 2})
+
+        (set-value-of-set I (range 1 3))
+
+        (set-value-of-param d 5)
+
+        (set-value-of-param b {3 4})
+
+        (set-value-of-param c '((1 2 3)
+                                (3 2 1))))
+       #+end_src
+
+       And after we have done that, we should add it to the model
+
+****** add the data-section to the model
+
+       Finally, we should add the data section to the model.  This should be done after all the model was defined.
+
+
+       #+begin_src lisp :results none  :tangle src/tutorial7.lisp
+       (problem tutorial7-problem-and-data
+                "Example 7 for LMML tutorial with for data section"
+
+                (set I)
+
+                (set J)
+
+                (variable-declaration x :domain {I J} :var-type binary-variable)
+
+                (parameter d)
+
+                (parameter b :domain {I})
+
+                (parameter c :domain {I J})
+
+                (minimize "obj" (sumf ((i in I) (j in I))
+                                      (* [c i j] [x i j])))
+
+                (constraint "r1" (<= (sumf ((i in I)) (* [b i]
+                                                         [x i j]))
+                                     1)
+                            :quantifiers ((for-all-quantifier j J)))
+
+
+                (data-section
+
+                 (set-value-of-set I {1 2})
+
+                 (set-value-of-set J {1 2 3})
+
+                 (set-value-of-param d 5)
+
+                 (set-value-of-param b {3 4})
+
+                 (set-value-of-param c '((1 2 3)
+                                         (3 2 1)))))
+       #+end_src
+****** export the new model and solve it
+
+              Once we have defined the problem, we can export it to any of the languages defined in LMML.  At the time of writing this tutorial the only defined language is GMPL, so we are going to export the problem to that language.
+
+       Right now, we have stored the AST of the problem in the variable =tutorial7-problem-and-data=.
+
+       We can export it to any (defined) language with the following line:
+
+       #+begin_src lisp :results output  :tangle src/tutorial1.lisp
+       (generate-code |tutorial7-problem-and-data| gmpl t)
+       #+end_src
+
+       #+RESULTS:
+       #+begin_example
+       /*Problem Example 7 for LMML tutorial with for data section*/
+
+
+       set I;
+
+       set J;
+
+       var x {i in I, j in J}, binary, >= 0;
+
+       param d;
+
+       param b {i in I};
+
+       param c {i in I, j in J};
+
+       minimize obj: sum {i in I, j in I} c[i, j]*x[i, j];
+
+       s.t. r1 {j in J}: sum {i in I} b[i]*x[i, j] <= 1;
+
+       data;
+
+       set I := 1, 2;
+
+       set J := 1, 2, 3;
+
+       param d := 5;
+
+       param b := 1 3
+                  2 4;
+
+       param c :    1 2 3 :=
+                 1  1 2 3
+                 2  3 2 1;
+
+       end;
+       #+end_example
+
+       Had we wanted to write the model to a file, we could have done the following:
+
+       #+begin_src lisp :results none
+       (WITH-OPEN-FILE (f "/tmp/lmml/tutorial7.mod"
+                          :DIRECTION :OUTPUT
+                          :IF-EXISTS :SUPERSEDE)
+
+         (generate-code tutorial7-problem-and-data gmpl f))
+       #+end_src
+
+       Note that the instruction =WITH-OPEN-FILE= is written in uppercase letters as well as the keywords =:DIRECTION=, =:OUTPUT=, =:IF-EXISTS=, and =:SUPERSEDE=.  This is also because of the call to =(turn-on-case-sensitivity)=.  The reason is that there is not lowercase version that macro nor it's keywords.
+
+       We didn't have to 'uppercase' the function or arguments in
+
+       =(generate-code tutorial7-problem-and-data gmpl t)=
+
+       because there are lowercase version of the function =GENERATE-CODE=, as well as the symbols =GMPL= and =T=.
+
+       After the previous code is executed, the model is written to the file "/tmp/lmml/tutorial7.mod".  You should change that path to a correct one on your machine.
+
+       To solve it we just call =glpsol= as:
+
+       #+begin_src sh :results output
+       glpsol -m /tmp/lmml/tutorial7.mod
+       #+end_src
+
+       #+RESULTS:
+       #+begin_example
+       GLPSOL: GLPK LP/MIP Solver, v4.57
+       Parameter(s) specified in the command line:
+        -m /tmp/lmml/tutorial7.mod
+       Reading model section from /tmp/lmml/tutorial7.mod...
+       Reading data section from /tmp/lmml/tutorial7.mod...
+       35 lines were read
+       Generating obj...
+       Generating r1...
+       Model has been successfully generated
+       GLPK Integer Optimizer, v4.57
+       4 rows, 6 columns, 10 non-zeros
+       6 integer variables, all of which are binary
+       Preprocessing...
+       3 rows, 0 columns, 0 non-zeros
+       0 integer variables, none of which are binary
+       Scaling...
+        A: min|aij| =  1.000e+00  max|aij| =  1.000e+00  ratio =  1.000e+00
+       Problem data seem to be well scaled
+       Solving LP relaxation...
+       GLPK Simplex Optimizer, v4.57
+       3 rows, 0 columns, 0 non-zeros
+       ~     0: obj =   0.000000000e+00  infeas =  0.000e+00
+       OPTIMAL SOLUTION FOUND
+       Integer optimization begins...
+       +     0: mip =     not found yet >=              -inf        (1; 0)
+       +     0: >>>>>   0.000000000e+00 >=   0.000000000e+00   0.0% (1; 0)
+       +     0: mip =   0.000000000e+00 >=     tree is empty   0.0% (0; 1)
+       INTEGER OPTIMAL SOLUTION FOUND
+       Time used:   0.0 secs
+       Memory used: 0.1 Mb (120665 bytes)
+       #+end_example
+
+       That output from =glpsol= means that everything went fine.
+       
+****** make the Lisp system case insensitive again
+       Finally, we should make the lisp system case insensitive again. 
+
+       To make the Lisp system case insensitive again, we use the function =(turn-off-case-sensitivity)=, like this:
+
+       #+begin_src lisp :results result :tangle src/tutorial7.lisp
+       (turn-off-case-sensitivity)
+       #+end_src
+
+       #+RESULTS:
+       : :UPCASE
+
+****** conclusion
+
+       And...  that's it :-D.
+
+       Congratulations!  If you have read this far, you know how to write optimization models in LMML, even with a data section!  ;-).  We hope this introduction has been useful to you, and we invite you to join us in the development of LMML and in spreading its use.  We are waiting for you.
+       
+
+
+*** TODO Tutorials on how to add new elements to the language
+    
+**** description
+     In this section we describe how to add a new element to the language.  That means to add a new class to the set of possible nodes in the AST.
+
+**** adding binary operations (by hand)
+***** description
+ One type of nodes in the AST are the binary operations.  Those are the operations +, -, *, /, and things like that.
+
+To add any new element we have to do at least 3 things, although the last one is optional.
+
+ 1. We have to create a class to represent the element with the required slots.
+ 2. We need to write the code for a constructor for the instances of that class
+ 3. we should have a way to display that element
+    this is the optional step
+
+In this section, we'll do all those steps for a new operation =subset=.
+
+***** define the class
+
+The first step is to define the class.  As this is a binary-operation the only slots it should have are: =left= and =right=, representing the left-hand and the right-hand of the operation.
+
+In lmml we have the convention that the binary operations should end with =-op=.  That means that if we want to create a binary operation named subset, the name of the class should be =subset-op=.
+
+We could create t class with the following code
+
+#+begin_src lisp :results none
+(defclass subset-op% ()
+  ((left :accessor left :initarg :left)
+   (right :accessor right :initarg :right)))
+#+end_src
+
+The name of the class has a trailing =%= :-|.  It is a convention meaning that this should not be the final version of the code.
+
+In this case this should not be the final version of the class because there is an "abstract" class named =binary-operation= that has precisely those two slots.  In fact any binary operation should inherit from this class.
+
+So a better definition for the class could be:
+
+#+begin_src lisp :results none
+(defclass subset-op%% (binary-operation)
+  ())
+#+end_src
+
+In this case, we inherit from binary-operation and have no proper slots.  
+
+However, according to the convention, this should not be the final version either.  The more =%= a name has, the better it is, so this version is better than the previous, but still not the best.  In this case, we'll find out why this isn't the best version almost at the end of the tutorial.  
+
+Spoiler: the reason because of which this isn't the best solution, is that we can achieve the same result without having to do the rest of the tutorial :-o.  However, we'll follow the tutorial to understant how to add new elements to language O:-), and in the end, we'll say, but we could have done all that with only this line of code :-o, ;-).  So, for now, let's follow the long and winding +road+ tutorial :-D.
+
+Once we have the definition of the class, we need the constructor.
+
+***** create a constructor for the class
+
+A constructor is a function that receives some arguments and returns an instance of the class with its slots properly initialized to those arguments.
+
+In this case, we want that constructor to have an explicit name.  In an ideal world it should be =subset=, that describes precisely the opreation; but that's not the name we are going to use, because this should not be the final version of the code ;-).  Because of that, the name we are going to use is =subset%%=.
+
+This function should receive as arguments the left-hand and right-hand side of the operation.  A first approach could be this:
+
+#+begin_src lisp :results none
+(defun subset%% (left right)
+  (make-instance 'subset-op%% :left left :right right))
+#+end_src
+
+The next step should be to test the function.
+
+#+begin_src lisp :results output
+(let* ((ast (subset%% "X" "C")))
+  (format t "~a" ast))
+#+end_src
+
+#+RESULTS:
+: (BINARY-OPERATION (LEFT X) (RIGHT C) )
+
+So far it works.  The only problem is that the generic function =print-object= is executing the code of the base class =binary-operation=, because there is no method defined for this class.  
+
+That's precisely the third step in the tutorial, and the optional one.  It is not mandatory, but it makes life a lot easier ;-).
+
+***** write the print-object method
+
+A =print-object= method for this class should be simple:
+
+#+begin_src lisp :results none
+(defmethod print-object ((obj subset-op%%) stream)
+  (format stream "(subset ~a ~a)" (left obj) (right obj)))
+#+end_src
+
+Let's test it with the same code that we used before:
+
+#+begin_src lisp :results output
+(let* ((ast (subset%% "X" "C")))
+  (format t "~a" ast))
+#+end_src
+
+#+RESULTS:
+: (subset X C)
+
+It works \o/.
+
+An after we add these code snippets, we can have a binary operation =subset= :-D.  Those are the steps that should be taken whenever we want to add new operations to lmml.
+
+But as we said before, if the operation we want to add to lmml is a binary-operation, all of this can be done very quickly with only one line of code.  That's what we'll do in the next tutorial.
+
+**** adding binary operations with only one line of code
+***** description
+ One type of nodes in the AST are the binary operations.  Those are the operations +, -, *, /, and things like that.
+
+To add *any* new element we have to do at least the 3 things described in the previous tutorial.
+
+ 1. create a class to represent the element with the required slots.
+ 2. write the code for a constructor for the instances of that class
+ 3. write a print-object method
+
+However, when the operation we want to add to the language is a binary-operation all of this steps can be done at once with the help of the macro =make-binary-operations=.
+***** the macro =make-binary-operations=
+The macro =make-binary-operations= receives a list with the description of the binary operations that should be created.
+
+If we take a look at the file [[file:lmml.org][lmml.org]], we can see the classes for the binary operations are defined in the following way:
+
+#+begin_src lisp :results none
+(make-binary-operations
+ ((add "addition" "+" +)
+  (subs "substraction" "-" -)
+  (less-than "less than" "<" <)
+  (less-or-equal "less than or equal to" "<=" <=)))
+#+end_src
+
+And if take a look at the macroexpansion for that code we get the following:
+
+
+#+begin_src lisp :results none
+(PROGN
+ (PROGN
+  (DEFNODE ADD-OP (BINARY-OPERATION)
+    NIL
+    :LAMBDA-LIST (LEFT RIGHT)
+    :STRING-OBJ ("(+ ~a ~a)" LEFT RIGHT)
+    :DOCUMENTATION "Class representing the addition operation"))
+ (PROGN
+  (DEFNODE SUBS-OP (BINARY-OPERATION)
+    NIL 
+    :LAMBDA-LIST (LEFT RIGHT)
+    :STRING-OBJ ("(- ~a ~a)" LEFT RIGHT)
+    :DOCUMENTATION "Class representing the substraction operation"))
+ (PROGN
+  (DEFNODE LESS-THAN-OP (BINARY-OPERATION)
+    NIL
+    :LAMBDA-LIST (LEFT RIGHT)
+    :STRING-OBJ ("(< ~a ~a)" LEFT RIGHT)
+    :DOCUMENTATION "Class representing the less than operation"))
+ (PROGN
+  (DEFNODE LESS-OR-EQUAL-OP (BINARY-OPERATION)
+    NIL :LAMBDA-LIST (LEFT RIGHT)
+    :STRING-OBJ ("(<= ~a ~a)" LEFT RIGHT)
+    :DOCUMENTATION "Class representing the less than or equal to operation")))
+#+end_src
+
+=Defnode= is another macro that allows us to create a class, a constructor, and a print-object method at the same time, by only specifying the corresponding parameters.  The exact meaning of each of the parameters will have it's own tutorial, and right now it's not very important ;-).
+
+The really important thing are the parameters of the macro =make-binary-operations=.  This macro receives a list where each element has the form:
+
+#+begin_src lisp :results none
+(add "addition" "+" +)
+#+end_src
+
+that can generalized as:
+
+#+begin_src lisp :results none
+(op-name 
+ "description of the operation"
+ "symbol-for-print-obj"
+ ignore-this)
+#+end_src
+
+the first element is the name of the operation that will be used as the name of the class.  It the case of the addition, the name is =add=, that will be automatically transformed into =add-op=.  Also the constructor for the class will have this name.  In this case it will be =add=.
+
+The second element will be used in the class documentation.
+
+The third element is the symbol that will be used in the print-object method.
+
+And finally, the last element of the list is optional and can be safely ignored by now.
+***** creating the subset operation with the macro
+So, with this description, if we want to create the class subeset using this macro we just need to add the following line:
+
+#+begin_src lisp :results none
+(make-binary-operations
+ ((subset "subset" "subset")))
+#+end_src
+
+After a couple of macroexpansions we get the following code:
+
+#+begin_src lisp
+(PROGN
+ (PROGN
+  (PROGN
+   (DEFCLASS SUBSET-OP (BINARY-OPERATION) NIL
+             (:DOCUMENTATION "Class representing the subset operation"))
+   (DEFUN SUBSET-OP (LEFT RIGHT)
+     (SYMBOL-MACROLET ((MAKE-CTR
+                        (MAKE-INSTANCE 'SUBSET-OP :LEFT LEFT :RIGHT RIGHT)))
+       MAKE-CTR))
+   (DEFMETHOD PRINT-OBJECT ((NODE SUBSET-OP) STREAM)
+     (FORMAT STREAM "(subset ~a ~a)" (LEFT NODE) (RIGHT NODE))))))
+#+end_src
+
+The only problem we have now with the generated code is that the name of the constructor is =subset-op= :-|.  (Don't tell this to anyone, but that could be fixed in the code for the macro :-|.  This should be fixed in a near future :-|)
+
+But that's simple enough, we only need to write the code for the constructor:
+
+#+begin_src lisp :results none
+(defun subset (left right)
+  (make-instance 'subset-op :left left :right right))
+#+end_src
+
+And after we evaluate that code snippte, we can check the results:
+
+#+begin_src lisp :results output
+(let* ((ast (subset "X" "C")))
+  (format t "~a" ast))
+#+end_src
+
+#+RESULTS:
+: (subset X C)
+ 
+And that's all we need: a call to =make-binary-operations= and then write the constructor.   
+
+Actually, there's no need to do that :smirk:.  There is macro called =make-binary-operations-layer-2-names= that allow us to define how we would like to name the constructors of the binary-operations.
+
+
+
+In the next tutorial I'm going to add 3 binary-operations: subset, not-equal-to and belongs (or set membership).
+**** adding three operations (subset, different-to, belongs)
+***** description
+In this section I'll just add the code for those three operations.
+***** the class defintions
+#+begin_src lisp :results none
+(make-binary-operations
+ ((subset    "subset" "subset")
+  (not-equal "not-equal" "not-equal")
+  (belongs-to "belongs-to" "belongs-to" )))
+#+end_src
+***** the second layer
+here comes a description about something called layers, that I don't want to go into right now :-(, but the short version is that allows us to create the names for the constructors automatically.
+
+It receives two parameters: the name of the operation (without the =-op=) and the name we want for the constructor.  It is something like this:
+
+#+begin_src lisp :results none
+(make-binary-operations-layer-2-names
+      ((subset subset)
+       (not-equal !=)
+       (belongs-to in)))
+#+end_src
+***** the tests
+An now, let's test it:
+#+begin_src lisp :results output
+(let* ((ast1 (subset "Y" "C"))
+       (ast2 (!= "a" "1"))
+       (ast3 (in "b" "I")))
+  (bformat t "testing subset, not equal and belongs")
+  (format t "~a~%" ast1)
+  (format t "~a~%" ast2)
+  (format t "~a~%" ast3))
+#+end_src
+
+#+RESULTS:
+: =======================================
+:  testing subset, not equal and belongs
+: =======================================
+: 
+: (subset Y C)
+: (not-equal a 1)
+: (belongs-to b I)
+
+And that should do it :-D.
+
+*** TODO Tutorial describing the layers
+
+*** TODO Tutorials on how to generate code to a new language
+**** description
+     In this section we'll describe how to generate code for a new language.
+
+
+     
+* TODO Model elements reference guide
+  
+** description
+
+   In this section we describe the slots of each class in the LMML AST.  This will be useful for those who want to generate a model's code a new language.  

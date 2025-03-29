@@ -1,0 +1,135 @@
+#+TITLE: VRP meaning restrictions
+#+AUTHOR: Carlos Arturo Perez Cabrera
+
+* Load
+#+BEGIN_SRC lisp :results none
+  (load "src/vrp-load.lisp")
+#+END_SRC
+
+*Meaning restrictions
+** Definition
+
+Las restricciones de significado son comprobaciones que se aplican a las variables del problema para verificar cumplan con su definicion.
+Son creadas a partir de soluciones de bajo nivel factible la cuales son modificadas para que sean infactibles.
+De esta manera si las soluciones se evaluan en el modelo y no se detectan errores, entonces se puede decir 
+que el modelo es incorrecto.
+Para esto se define la funcion generica =meaning-restriction= que se especializa en cada
+class-name segun la variable a la que se le quiere comprobar el significado y para esto se utiliza =:after= 
+
+#+BEGIN_SRC lisp +n -r :results none :exports code :tangle ./src/vrp-meaning-restrictions.lisp
+      (in-package :vrp)
+
+      (defgeneric meaning-restriction (problem-solution variable-parameter-meaning variable-parameter stream))
+
+      (defmethod meaning-restriction (problem-solution variable-parameter-meaning variable-parameter stream)
+              (format stream "IN main meaning-restriction~%"))
+#+END_SRC
+
+
+** Test
+
+Como ejemplo de restricciones de significado se tiene la implementacion de la restriccion para =vehicles-charge-residual-from-client-i-to-j-meaning=.
+Esto lo que va a hacer es cambiar las rutas de los vehiculos para que no cumplan que la carga residual de un cliente a otro sea correcta a la hora de evaluar el modelo,
+pues se tiene esta relacion u_ij + u_ji =Cx_ij donde u_ij es la carga residual de un cliente i a un cliente j , C es la capacidad de los vehiculos y x_ij es la variable que indica si el vehiculo va de i a j.
+Al cambiarse esta ultima ya no cumpliria la relacion y se detectaria un error en el modelo a la hora de comprobar los significados de las variables.
+
+#+BEGIN_SRC lisp +n -r :results none :exports code :tangle ./src/vrp-meaning-restrictions.lisp
+
+	(defmethod meaning-restriction :after (problem-solution
+	                    (variable-parameter-meaning vehicles-charge-residual-from-client-i-to-j-meaning)
+				      variable-parameter
+				      stream)
+
+
+		(format stream "IN vehicles-charge-residual-from-client-i-to-j  MEANING~%")
+		(let ((n (+ 2 (length (clients problem-solution)))))
+		(setf (x-ij variable-parameter) (make-array (list n n) :initial-element 0))
+
+        (let ((original-routes (routes problem-solution))  
+              (new-routes nil))
+
+        (block outer-loop
+		 (loop
+          ;generating new routes
+		 (setf new-routes (make-routes (clients problem-solution)))
+
+		 (setf new-routes (loop for r in new-routes
+				      collecting (push 0 r)))
+
+		 (setf new-routes (loop for r in new-routes 
+				      collecting (append r '(0))))
+         ;checking if new routes are different from original routes
+		(loop for original-sublist in original-routes
+			always (not (equal (first new-routes) original-sublist))
+			finally (return-from outer-loop))
+		 )
+		)
+
+		 (loop for r in new-routes
+			do (loop for i in r 
+				for j in (cdr r)
+				do (if (eq j 0)
+					(setf (aref (x-ij variable-parameter) i (1- n)) 1)
+					(setf (aref (x-ij variable-parameter) i j) 1))
+				))
+		)
+	    )
+		(format stream "x_ij: ~a~%" (x-ij variable-parameter))
+	)
+#+END_SRC
+
+Esta restriccion se encarga de verificar que la variable =vehicles-charge-residual-from-client-i-to-j= cuya representacion es =u_ij= cumpla con su definicion.
+
+
+A continuacion se muestra un ejemplo de como se aplica esta comprobacion a un modelo incorrecto al cual le falta la restriccion que le da sentido a la variable =vehicles-charge-residual-from-client-i-to-j=.
+
+#+BEGIN_SRC lisp :results output
+    (in-package :lmml)
+
+    (problem cvrp-model-rigth "CVRP Commodity Flow [RIGTH]"
+	     (set V)
+	     (set I)
+
+	     (parameter c :domain {V V})
+	     (parameter d :domain {V})
+	     (parameter n)
+	     (parameter P)
+	     (parameter K)
+
+	     (variable-declaration x :domain {V V} :var-type binary-variable)
+	     (variable-declaration y :domain {V V})
+
+	     (minimize "obj" (sumf ((a in V))  (sumf ((b in V)) (* [x a b] [c a b]))))
+	     
+	     (constraint "r1" (= (sumf ((b in V)) (- [y b a] [y a b])) (* 2 [d a]))
+						   :quantifiers ((for-all-quantifier a I)))
+	     (constraint "r2" (= (sumf ((b in I)) [y 0 b]) (sumf ((a in I)) [d a])))
+	     (constraint "r3" (= (sumf ((b in I)) [y b 0]) (- (* K P) (sumf ((a in I)) [d a]) )))
+	     (constraint "r4" (= (sumf ((b in I)) [y (+ n 1) b]) (* K P)))
+	     (constraint "r6" (= (sumf ((b in V)) [x a b]) 1)
+						   :quantifiers ((for-all-quantifier a I)))
+	     (constraint "r7" (= (sumf ((b in V)) [x b a]) 1)
+						   :quantifiers ((for-all-quantifier a I))))
+
+
+    (in-package :vrp)
+    (defparameter param-variable-set-meaning (list (cons 'V 'client-depot-set)
+						   (cons 'I 'client-set)
+						   (cons 'd 'demand-each-client)
+						   (cons 'n 'number-clients)
+						   (cons 'P 'capacity-vehicles)
+						   (cons 'K 'number-vehicles)
+						   (cons 'x 'vehicle-goes-from-client-i-to-j)
+						   (cons 'y 'vehicles-charge-residual-from-client-i-to-j)))
+
+    (def-vrp-description cvrp-description (visit-each-client-at-least-once
+					   dont-overload-vehicle
+					   visit-client-at-most-once
+					   begin-in-depot					
+					   end-in-depot))
+
+     (bformat t "MODELO CORRECTO")
+        (model-evaluator lmml::cvrp-model-rigth param-variable-set-meaning
+		   'cvrp-description 'basic-strategy "output-rigth.txt" 1000)
+
+#+END_SRC

@@ -1,0 +1,57 @@
+#+TITLE: VRP prerequisites
+#+AUTHOR: Alejandra Monzon Penna
+
+* Load
+
+#+BEGIN_SRC lisp :results none
+  (load "src/vrp-load.lisp")
+#+END_SRC
+* Prerequisitos
+
+Para cada caracteristica del VRP, es necesario definirle un conjunto de prerequisitos, que son a su vez
+otras caracteristicas. Esto sucede porque el metodo =generate-solution-by-condition=, que construye 
+la solucion de alto nivel es un metodo =after= por tanto al crear una descripcion de VRP se tiene que heredar 
+de las clases caracteristicas en un orden determinado. 
+
+#+BEGIN_SRC lisp +n -r :results none :exports code :tangle ./src/vrp-prerequisites.lisp
+  (in-package :vrp)
+
+      (defgeneric get-prerequisites (characteristic high-level-strategy))
+      ;; Generic function that for a characteristic and high-level-strategy pair 
+  ;; get the list of prerequisites of that characteristic on that high level strategy
+
+
+  ;; This function return the code for a specific characteristic and high-level-strategy
+  ;; of their respective get-prerequisites method, is used in a macro that creates all those functions.   
+      (defun prerequisite-characteristics-code (characteristic prerequisite-classes high-level-strategy)
+	    `(defmethod get-prerequisites ((characteristic (eql ',characteristic)) (high-level-strategy (eql ',high-level-strategy)))
+	       ',prerequisite-classes))
+
+
+#+END_SRC 
+
+Los prerequisitos de una caracteristica dependen de la *estrategia de alto nivel* , esta es la que determina 
+como la caracteristica modifica el *par-problema-solucion* .
+
+Obtener un orden de caracteristicas haciendo uso de prerequisitos es posible mediante una 
+ordenacion topologica. 
+
+#+BEGIN_SRC lisp +n -r :results none :exports code :tangle ./src/vrp-prerequisites.lisp
+
+    (defun topologic-sort (characteristics high-level-strategy  &aux (visited ()) (topo ()))
+	    (labels ((dfs* (c)
+		    (push c visited)
+		    (let    ((prerequisites (get-prerequisites c high-level-strategy))) 
+                    (loop for prerequisite-characteristic in prerequisites
+				        when (and (not (member prerequisite-characteristic visited)) (member prerequisite-characteristic characteristics))
+				        do  (dfs* prerequisite-characteristic)))
+			(push c topo)))
+
+		(loop for c in characteristics
+			when (not (member c visited))
+			do (dfs* c)))
+		topo)
+
+#+END_SRC 
+
+

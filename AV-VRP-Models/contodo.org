@@ -1,0 +1,176 @@
+#+BEGIN_SRC lisp :results output
+    (load "src/vrp-load.lisp")
+    (in-package :lmml)
+
+    (problem cvrp-model-rigth "CVRP Commodity Flow [RIGTH]"
+	     (set V)
+	     (set I)
+
+	     (parameter c :domain {V V})
+	     (parameter d :domain {V})
+	     (parameter n)
+	     (parameter P)
+	     (parameter K)
+
+	     (variable-declaration x :domain {V V} :var-type binary-variable)
+	     (variable-declaration y :domain {V V})
+
+	     (minimize "obj" (sumf ((a in V))  (sumf ((b in V)) (* [x a b] [c a b]))))
+	     
+	     (constraint "r1" (= (sumf ((b in V)) (- [y b a] [y a b])) (* 2 [d a]))
+						   :quantifiers ((for-all-quantifier a I)))
+	     (constraint "r2" (= (sumf ((b in I)) [y 0 b]) (sumf ((a in I)) [d a])))
+	     (constraint "r3" (= (sumf ((b in I)) [y b 0]) (- (* K P) (sumf ((a in I)) [d a]) )))
+	     (constraint "r4" (= (sumf ((b in I)) [y (+ n 1) b]) (* K P)))
+	     (constraint "r5" (= (+ [y a b] [y b a]) (* P (+ [x a b] [x b a])))
+						 :quantifiers ((for-all-quantifier a V)
+							       (for-all-quantifier b V (< a b))))
+	     (constraint "r6" (= (sumf ((b in V)) [x a b]) 1)
+						   :quantifiers ((for-all-quantifier a I)))
+	     (constraint "r7" (= (sumf ((b in V)) [x b a]) 1)
+						   :quantifiers ((for-all-quantifier a I))))
+
+
+    (in-package :vrp)
+    (defparameter param-variable-set-meaning (list (cons 'V 'client-depot-set)
+						   (cons 'I 'client-set)
+						   (cons 'd 'demand-each-client)
+						   (cons 'n 'number-clients)
+						   (cons 'P 'capacity-vehicles)
+						   (cons 'K 'number-vehicles)
+						   (cons 'x 'vehicle-goes-from-client-i-to-j)
+						   (cons 'y 'vehicles-charge-residual-from-client-i-to-j)))
+
+    (def-vrp-description cvrp-description (visit-each-client-at-least-once
+					   dont-overload-vehicle
+					   visit-client-at-most-once
+					   begin-in-depot					
+					   end-in-depot))
+
+     (bformat t "MODELO CORRECTO")
+        (model-evaluator lmml::cvrp-model-rigth param-variable-set-meaning
+		   'cvrp-description 'basic-strategy "output-rigth.txt" 1000)
+
+#+END_SRC
+
+
+
+
+
+
+################################EL que esta mal del significado
+
+
+#+BEGIN_SRC lisp :results output
+    (load "src/vrp-load.lisp")
+    (in-package :lmml)
+
+    (problem cvrp-model-rigth "CVRP Commodity Flow [RIGTH]"
+	     (set V)
+	     (set I)
+
+	     (parameter c :domain {V V})
+	     (parameter d :domain {V})
+	     (parameter n)
+	     (parameter P)
+	     (parameter K)
+
+	     (variable-declaration x :domain {V V} :var-type binary-variable)
+	     (variable-declaration y :domain {V V})
+
+	     (minimize "obj" (sumf ((a in V))  (sumf ((b in V)) (* [x a b] [c a b]))))
+	     
+	     (constraint "r1" (= (sumf ((b in V)) (- [y b a] [y a b])) (* 2 [d a]))
+						   :quantifiers ((for-all-quantifier a I)))
+	     (constraint "r2" (= (sumf ((b in I)) [y 0 b]) (sumf ((a in I)) [d a])))
+	     (constraint "r3" (= (sumf ((b in I)) [y b 0]) (- (* K P) (sumf ((a in I)) [d a]) )))
+	     (constraint "r4" (= (sumf ((b in I)) [y (+ n 1) b]) (* K P)))
+	     (constraint "r6" (= (sumf ((b in V)) [x a b]) 1)
+						   :quantifiers ((for-all-quantifier a I)))
+	     (constraint "r7" (= (sumf ((b in V)) [x b a]) 1)
+						   :quantifiers ((for-all-quantifier a I))))
+
+
+    (in-package :vrp)
+    (defparameter param-variable-set-meaning (list (cons 'V 'client-depot-set)
+						   (cons 'I 'client-set)
+						   (cons 'd 'demand-each-client)
+						   (cons 'n 'number-clients)
+						   (cons 'P 'capacity-vehicles)
+						   (cons 'K 'number-vehicles)
+						   (cons 'x 'vehicle-goes-from-client-i-to-j)
+						   (cons 'y 'vehicles-charge-residual-from-client-i-to-j)))
+
+    (def-vrp-description cvrp-description (visit-each-client-at-least-once
+					   dont-overload-vehicle
+					   visit-client-at-most-once
+					   begin-in-depot					
+					   end-in-depot))
+
+     (bformat t "MODELO CORRECTO")
+        (model-evaluator lmml::cvrp-model-rigth param-variable-set-meaning
+		   'cvrp-description 'basic-strategy "output-rigth.txt" 1000)
+
+#+END_SRC
+
+
+
+
+
+################################El que esta mal de final de ruta y eso
+
+
+
+#+BEGIN_SRC lisp :results output
+    (load "src/vrp-load.lisp")
+    (in-package :lmml)
+
+    (problem cvrp-model-rigth "CVRP Commodity Flow [RIGTH]"
+	     (set V)
+	     (set I)
+
+	     (parameter c :domain {V V})
+	     (parameter d :domain {V})
+	     (parameter n)
+	     (parameter P)
+	     (parameter K)
+
+	     (variable-declaration x :domain {V V} :var-type binary-variable)
+	     (variable-declaration y :domain {V V})
+
+	     (minimize "obj" (sumf ((a in V))  (sumf ((b in V)) (* [x a b] [c a b]))))
+	     
+	     (constraint "r1" (= (sumf ((b in V)) (- [y b a] [y a b])) (* 2 [d a]))
+						   :quantifiers ((for-all-quantifier a I)))
+	     (constraint "r2" (= (sumf ((b in I)) [y 0 b]) (sumf ((a in I)) [d a])))
+	     (constraint "r3" (= (sumf ((b in I)) [y b 0]) (- (* K P) (sumf ((a in I)) [d a]) )))
+	     (constraint "r5" (= (+ [y a b] [y b a]) (* P (+ [x a b] [x b a])))
+						 :quantifiers ((for-all-quantifier a V)
+							       (for-all-quantifier b V (< a b))))
+	     (constraint "r6" (= (sumf ((b in V)) [x a b]) 1)
+						   :quantifiers ((for-all-quantifier a I)))
+	     (constraint "r7" (= (sumf ((b in V)) [x b a]) 1)
+						   :quantifiers ((for-all-quantifier a I))))
+
+
+    (in-package :vrp)
+    (defparameter param-variable-set-meaning (list (cons 'V 'client-depot-set)
+						   (cons 'I 'client-set)
+						   (cons 'd 'demand-each-client)
+						   (cons 'n 'number-clients)
+						   (cons 'P 'capacity-vehicles)
+						   (cons 'K 'number-vehicles)
+						   (cons 'x 'vehicle-goes-from-client-i-to-j)
+						   (cons 'y 'vehicles-charge-residual-from-client-i-to-j)))
+
+    (def-vrp-description cvrp-description (visit-each-client-at-least-once
+					   dont-overload-vehicle
+					   visit-client-at-most-once
+					   begin-in-depot					
+					   end-in-depot))
+
+     (bformat t "MODELO CORRECTO")
+        (model-evaluator lmml::cvrp-model-rigth param-variable-set-meaning
+		   'cvrp-description 'basic-strategy "output-rigth.txt" 1000)
+
+#+END_SRC

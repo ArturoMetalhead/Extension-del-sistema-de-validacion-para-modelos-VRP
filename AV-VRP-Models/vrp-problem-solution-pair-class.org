@@ -1,0 +1,112 @@
+#+TITLE: VRP problem-solution-pair class
+#+AUTHOR: Alejandra Monzon Penna
+
+* Load
+#+BEGIN_SRC lisp :results none
+  (load "src/vrp-load.lisp")
+#+END_SRC
+
+* Clase Problem-Solution-Pair 
+
+Como la funcion =generate-solution-by-condition=, construye a la 
+vez una solucion y un problema que satisfaga una caracteriastica (condicion) 
+especifica cada vez; entonces para cada condicion, en dependencia de la 
+*estrategia dealto nivel* que se emplee, se conoce que campos =slug= del 
+problema y/o la solucion son alterados por la caracteristica. 
+
+Por tanto se puede establecer una relacion entre cada caracteristica y 
+una lista de clases que contengan cada una un campo que la caracteristica modifica 
+sea en el problema o solucion, en dependencia de la *estrategia de alto nivel* .
+
+** Clases con campos para heredar y modificar 
+
+Priemro es necesario tener un conjunto de clases, a las que denominamos =has-X= donde X 
+es el nombre del campo presente en algun problema/solucion de VRP. 
+
+Para crear estas clases nos auxiliamos de un macro que automaticamente cree 
+la clase conociendo solo el nombre del campo *X* .
+
+#+BEGIN_SRC lisp +n -rt :results none :exports code :tangle ./src/vrp-problem-solution-pair.lisp
+  (in-package :vrp)
+
+  (defun make-slot-by-name (slot-name) 
+      `(,slot-name
+	      :accessor ,slot-name
+	      :initarg ,(make-keyword slot-name)
+	      :initform nil
+	      ))
+
+  ;; Macro that given a required field X creates a class HAS-X with an slot X
+  (defmacro def-requirement-class (slot-name)
+	  `(defclass ,(intern (format nil "HAS-~a" slot-name)) ()
+	      (,(make-slot-by-name slot-name))))
+
+#+END_SRC
+
+ Creemos algunas clases utilizando el macro que nos resulten de utilidad como:
+
+#+BEGIN_SRC lisp +n -rt :results none :exports code :tangle ./src/vrp-problem-solution-pair.lisp
+
+    (def-requirement-class clients)
+
+    (def-requirement-class routes) 
+
+    (def-requirement-class demand)
+
+    (def-requirement-class capacity)
+
+    (def-requirement-class distance)
+
+#+END_SRC
+
+
+*** test
+
+#+BEGIN_SRC lisp +n -rt :results output
+
+  (format t "Clientes de has-clients ~a~%" (clients (make-instance 'has-clients)))
+
+#+END_SRC
+
+#+RESULTS:
+: Clientes de has-clients NIL
+
+** Asignar clases has-X a caracteristicas 
+
+Para asociarle a una caracteristicas las clases has-X tales que los campos X 
+son modificados por dicha caracteristica al generar soluciones de alto nivel 
+creamos una funcion generica que en dependencia de la *estrategia de alto nivel* 
+devuelva para la caracteristica su lista de clases con campos a modificar. 
+
+#+BEGIN_SRC lisp +n -r :results none :exports code :tangle ./src/vrp-problem-solution-pair.lisp  
+
+    (defgeneric get-required-classes (characteristic high-level-strategy))
+
+    (defun required-classes-code (characteristic required-classes high-level-strategy)
+        `(defmethod get-required-classes ((characteristic (eql ',characteristic)) (high-level-strategy (eql ',high-level-strategy)))
+            ',required-classes))
+
+
+#+END_SRC
+
+** Construccion de una clase problem-solution-pair 
+
+Teniendo un VRP descrito por sus *caracteristicas* y conociendo segun la 
+*estrategia de modelacion* que campos modifica la funcion =generate-solution-by-condition= 
+entonces se puede crear una unica clase =problem-solution-pair= que herede 
+de todas las clases *has-X* necesarias por todas las caracteristicas del VRP. 
+
+#+BEGIN_SRC lisp +n -rt :results none :exports code :tangle ./src/vrp-problem-solution-pair.lisp
+
+    (defmacro def-problem-solution-pair (name high-level-strategy vrp-description)
+
+	(let*   ((description (get-description-elements vrp-description))
+		 (required-classes '()) )
+		(loop for d in description
+		      do (setf required-classes (append required-classes (get-required-classes d high-level-strategy)) ))
+				  
+		(setf required-classes (remove-duplicates required-classes))
+	 `(defclass ,name ,required-classes ())))
+#+END_SRC
+
+

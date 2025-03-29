@@ -1,0 +1,196 @@
+#+TITLE: VRP characteristics
+#+AUTHOR: Alejandra Monzon Penna
+#+AUTHOR: Gabriela Arguelles Terron 
+
+* Load Files 
+
+#+BEGIN_SRC lisp :results output
+  (load "src/vrp-load.lisp")
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+Files form lmml: 
+Loading lmml/src/gagm.lisp ................................ OK
+Loading lmml/src/package.lisp ............................. OK
+Loading lmml/src/generic-functions.lisp ................... OK
+Loading lmml/src/utilities.lisp ........................... OK
+Loading lmml/src/macros.lisp .............................. OK
+Loading lmml/src/reader-macros.lisp ....................... OK
+Loading lmml/src/infix-to-prefix.lisp ..................... OK
+Loading lmml/src/ast-nodes.lisp ........................... OK
+Loading lmml/src/basic-language.lisp ...................... OK
+Loading lmml/src/code-generation-utils.lisp ............... OK
+Loading lmml/src/problem-examples.lisp .................... OK
+Loading lmml/src/writer-gmpl.lisp ......................... OK
+Loading lmml/src/lmml-case-sensitivity.lisp ............... OK
+
+Files from src
+Loading ./src/vrp-function-generator.lisp ................. OK
+
+Package VRP
+Loading ./src/vrp-package.lisp ............................ OK
+
+Files form utils: 
+Loading ./utils/vrp-random-number-generation.lisp ......... OK
+Loading ./utils/vrp-utils.lisp ............................ OK
+
+Files form src
+Loading ./src/vrp-utils.lisp .............................. OK
+Loading ./src/vrp-characteristics.lisp .................... OK
+Loading ./src/vrp-description-definition.lisp ............. OK
+Loading ./src/vrp-prerequisites.lisp ...................... OK
+Loading ./src/vrp-problem-solution-pair.lisp .............. OK
+Loading ./src/vrp-high-level-strategy.lisp ................ OK
+Loading ./src/vrp-generate-solution.lisp .................. OK
+Loading ./src/vrp-variables-parameters.lisp ............... OK
+Loading ./src/vrp-from-high-to-low.lisp ................... OK
+Loading ./src/vrp-model-evaluator.lisp .................... OK
+
+Package AV-VRP
+Loading ./src/av-vrp-package.lisp ......................... OK
+#+end_example
+
+* Caracteristicas
+    
+  Se define por cada posible caracteristica del VRP una clase, en este caso se definen las caraceristicas correspondientes a un CVRP.
+
+#+BEGIN_SRC lisp +n -r :results none :exports code :tangle ./src/vrp-characteristics.lisp
+  (in-package :vrp)
+
+  (defclass visit-client-at-most-once () ())
+
+  (defclass dont-overload-vehicle () ())
+
+  (defclass begin-in-depot () ())
+
+  (defclass end-in-depot () ())
+
+  (defclass visit-each-client-at-least-once () ())
+
+#+END_SRC
+
+** Caracteristicas negadas
+
+Por cada caractristica del problema es necesario definir al menos una caracteristica opuesta
+para CVRP serian:
+
+#+BEGIN_SRC lisp +n -r :results none :exports code :tangle ./src/vrp-characteristics.lisp 
+
+  (defclass visit-client-more-than-once () ()
+  (:documentation "With this constraint the 'visit customer only once' is broken adding a random customer in two routes (may be the same)."))
+
+  (defclass overload-vehicles () ()
+  (:documentation "Breaks the 'don't overload the vehicles' constraint by choosing the minimum of the load of each vehicle minus one."))
+
+  (defclass begin-anywhere () ()
+  (:documentation "The routes may begin customer place, i.e. they aren't forced to begin in the depot."))
+
+    (defclass end-anywhere () ()
+  (:documentation "The routes may end customer place, i.e. they aren't forced to end in the depot."))
+
+  (defclass dont-visit-each-client-at-least-once () ())
+
+#+END_SRC
+
+** Enlazar caracteristicas con sus negaciones
+
+  Es necesario poder asociar a cada caracteristica sus opuestos, para esto se define una funcion generica 
+  que en dependencia de la clase caracteristica que reciba devuelva su lista de opuestos. 
+
+  Para no tener que reescribir el codigo de la funcion especializada en cada clase, se hace un macro que cree 
+  las funciones por nosotros.
+
+    
+#+BEGIN_SRC lisp +n -r :results none :exports code :tangle ./src/vrp-characteristics.lisp 
+
+  (defgeneric opposite-characteristics (class))
+
+  (defmacro def-opposite (class &rest opposite-classes)
+	  `(defmethod opposite-characteristics ((class (eql ',class)))
+	    ',opposite-classes))
+      
+#+END_SRC
+
+  Ahora si, a enlazar cada caracteristica con sus opuestos llamando al macro def-opposite    
+
+#+BEGIN_SRC lisp +n -r :results none :exports code :tangle ./src/vrp-characteristics.lisp 
+
+  (def-opposite visit-client-at-most-once visit-client-more-than-once)
+
+  (def-opposite dont-overload-vehicle overload-vehicles)
+
+  (def-opposite begin-in-depot begin-anywhere)
+
+   (def-opposite end-in-depot end-anywhere)
+
+  (def-opposite visit-each-client-at-least-once dont-visit-each-client-at-least-once)
+
+#+END_SRC
+
+*** TEST
+
+#+BEGIN_SRC lisp +n -r :results output
+
+  (format t "The oppsite of visit-each-client-at-least-once is: ~a~%" (opposite-characteristics 'visit-each-client-at-least-once))
+
+  (format t "The oppsite of dont-overload-vehicle is: ~a~%" (opposite-characteristics 'dont-overload-vehicle))
+
+  (format t "The oppsite of visit-client-at-most-once is: ~a~%" (opposite-characteristics 'visit-client-at-most-once))
+
+  (format t "The oppsite of begin-in-depot is: ~a~%" (opposite-characteristics 'begin-in-depot))
+
+    (format t "The oppsite of end-in-depot is: ~a~%" (opposite-characteristics 'end-in-depot))
+
+#+END_SRC
+
+#+RESULTS:
+: The oppsite of visit-each-client-at-least-once is: (DONT-VISIT-EACH-CLIENT-AT-LEAST-ONCE)
+: The oppsite of dont-overload-vehicle is: (OVERLOAD-VEHICLES)
+: The oppsite of visit-client-at-most-once is: (VISIT-CLIENT-MORE-THAN-ONCE)
+: The oppsite of begin-in-depot is: (BEGIN-ANYWHERE)
+: The oppsite of end-in-depot is: (END-ANYWHERE)
+
+
+
+
+* Descripcion de VRP 
+
+Con las caracteristicas es posible obtener una 
+descripcion de VRP.
+
+#+BEGIN_SRC lisp +n -rt :results none :exports code :tangle ./src/vrp-description-definition.lisp
+  (in-package :vrp)
+
+  (defgeneric get-description-elements (class))
+
+  (defmacro def-vrp-description (name characteristics)
+          `(progn
+	       (defclass ,name ,characteristics ())
+	       (defmethod get-description-elements ((class (eql ',name)))
+				  ',characteristics)))
+
+#+END_SRC 
+
+***** TEST
+
+  Probando el macro que crea descripciones de vrp 
+  
+  #+BEGIN_SRC lisp +n -r :results none :exports code :tangle ./src/vrp-description-definition.lisp
+
+   (def-vrp-description cvrp-description (visit-each-client-at-least-once dont-overload-vehicle visit-client-at-most-once begin-in-depot end-in-depot))
+
+  #+END_SRC
+
+  Probando que luego de crear la descripcion de cvrp se puedan pedir los elementos de su descripcion (sus caracteristicas )
+
+  #+BEGIN_SRC lisp +n -r :results output
+
+    (format t "La descripcion del CVRP es: ~a~%" (get-description-elements 'cvrp-description))
+
+  #+END_SRC
+
+  #+RESULTS:
+  : La descripcion del CVRP es: (VISIT-EACH-CLIENT-AT-LEAST-ONCE
+  :                              DONT-OVERLOAD-VEHICLE VISIT-CLIENT-AT-MOST-ONCE
+  :                              BEGIN-IN-DEPOT END-IN-DEPOT)

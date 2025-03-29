@@ -1,0 +1,135 @@
+#+TITLE: VRP high-level-strategy
+#+AUTHOR: Alejandra Monzon Penna
+
+* Load Files 
+
+#+BEGIN_SRC lisp :results none
+  (load "src/vrp-load.lisp")
+#+END_SRC
+
+* Estrategias de Alto Nivel 
+
+Una estrategia de alto nivel es la forma de definir el comportamiento 
+de las caracteristicas del problema; tanto en que orden deben estas
+modificar al problema y/o solucion que se construye con la funcion 
+=generate-solution-by-condition=, como que campos modifica. 
+
+
+#+BEGIN_SRC lisp +n -r :results none :exports code :tangle ./src/vrp-high-level-strategy.lisp
+  (in-package :vrp)
+
+  (defmacro def-high-level-strategy (name prerequisites required-classes)
+      (let*   ((class `(defclass ,name () ()))
+	      (prerequisites-methods (loop  for p in prerequisites
+		  collecting (prerequisite-characteristics-code (car p) (cdr p) name)))
+	      (required-classes-methods (loop  for r in required-classes
+		  collecting (required-classes-code (car r) (cdr r) name)) ))
+
+	  `(progn ,class
+		  ,@prerequisites-methods
+		  ,@required-classes-methods )))
+
+#+END_SRC
+
+Creemos entonces una estrategia basica 
+
+    #+BEGIN_SRC lisp +n -r :results none :exports code :tangle ./src/vrp-high-level-strategy.lisp
+
+      (let* ((prerequisites '((visit-each-client-at-least-once)
+			      (dont-overload-vehicle visit-client-at-most-once)
+			      (begin-in-depot visit-each-client-at-least-once)
+			      (end-in-depot visit-each-client-at-least-once)
+			      (visit-client-at-most-once visit-each-client-at-least-once)))
+
+	     (has-x '((visit-each-client-at-least-once has-routes has-clients)
+		      (dont-overload-vehicle has-routes has-clients has-capacity has-demand)
+		      (begin-in-depot has-routes has-clients)
+		      (end-in-depot has-routes has-clients)
+		      (visit-client-at-most-once has-clients has-routes))))
+
+	(eval `(def-high-level-strategy basic-strategy ,prerequisites ,has-x)))
+
+
+
+
+  #+END_SRC
+
+  *** TEST
+
+  Probando que funcione la definicion de prerequisitos
+  
+  #+BEGIN_SRC lisp +n -r :results output
+
+    (format t "Prerequisites of dont-overload-vehicle are: ~a~%" (get-prerequisites 'dont-overload-vehicle 'basic-strategy))
+
+    (format t "Prerequisites of visit-all-clienst are: ~a~%" (get-prerequisites 'visit-each-client-at-least-once 'basic-strategy))
+
+    (format t "Prerequisites of visit-client-at-most-once are: ~a~%" (get-prerequisites 'visit-client-at-most-once 'basic-strategy))
+
+    (format t "Prerequisites of begin-in-depot are: ~a~%" (get-prerequisites 'begin-in-depot 'basic-strategy))
+
+    (format t "Prerequisites of end-in-depot are: ~a~%" (get-prerequisites 'end-in-depot 'basic-strategy))
+
+  #+END_SRC
+
+  #+RESULTS:
+  : Prerequisites of dont-overload-vehicle are: (VISIT-CLIENT-AT-MOST-ONCE)
+  : Prerequisites of visit-all-clienst are: NIL
+  : Prerequisites of visit-client-at-most-once are: (VISIT-EACH-CLIENT-AT-LEAST-ONCE)
+  : Prerequisites of begin-in-depot are: (VISIT-EACH-CLIENT-AT-LEAST-ONCE)
+  : Prerequisites of end-in-depot are: (VISIT-EACH-CLIENT-AT-LEAST-ONCE)
+
+
+  Probando que funcione la definicion de clases requeridas por caracteristicas
+
+    #+BEGIN_SRC lisp +n -r :results output
+
+      (format t "Required classes for dont-overload-vehicle are: ~a~%" (get-required-classes 'dont-overload-vehicle 'basic-strategy))
+
+      (format t "Required classes for visit-all-clienst are: ~a~%" (get-required-classes 'visit-each-client-at-least-once 'basic-strategy))
+
+      (format t "Required classes for visit-client-at-most-once are: ~a~%" (get-required-classes 'visit-client-at-most-once 'basic-strategy))
+
+      (format t "Required classes for begin-in-depot are: ~a~%" (get-required-classes 'begin-in-depot 'basic-strategy))
+
+        (format t "Required classes for end-in-depot are: ~a~%" (get-required-classes 'end-in-depot 'basic-strategy))
+
+  #+END_SRC
+
+  #+RESULTS:
+  : Required classes for dont-overload-vehicle are: (HAS-ROUTES HAS-CLIENTS
+  :                                                  HAS-CAPACITY HAS-DEMAND)
+  : Required classes for visit-all-clienst are: (HAS-ROUTES HAS-CLIENTS)
+  : Required classes for visit-client-at-most-once are: (HAS-CLIENTS HAS-ROUTES)
+  : Required classes for begin-in-depot are: (HAS-ROUTES HAS-CLIENTS)
+  : Required classes for end-in-depot are: (HAS-ROUTES HAS-CLIENTS)
+  
+  Probando el funcionamiento del orden topologico
+
+  #+BEGIN_SRC lisp +n -r :results output
+
+    (format t "Characteristis's order is: ~a~%" (topologic-sort '(visit-each-client-at-least-once visit-client-at-most-once dont-overload-vehicle end-in-depot begin-in-depot) 'basic-strategy))
+
+  #+END_SRC
+
+  #+RESULTS:
+  : EL orden de las caracteristicas es: (BEGIN-END-IN-DEPOT DONT-OVERLOAD-VEHICLE
+  :                                      VISIT-CLIENT-AT-MOST-ONCE
+  :                                      VISIT-EACH-CLIENT-AT-LEAST-ONCE)
+
+
+
+
+
+  Probando la creacion de la clase problema-solucion
+
+    #+BEGIN_SRC lisp +n -r :results none :exports code :tangle ./src/vrp-high-level-strategy.lisp
+
+   (def-problem-solution-pair cvrp-problem-solution basic-strategy cvrp-description)
+
+  #+END_SRC
+
+  
+
+
+  

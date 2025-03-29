@@ -1,0 +1,623 @@
+#+TITLE: VRP generate-solution
+#+AUTHOR: Alejandra Monzon Penna
+#+AUTHOR: Gabriela Arguelles Terron
+
+* Load
+#+BEGIN_SRC lisp :results none
+  (load "src/vrp-load.lisp")
+#+END_SRC
+
+* Utiles
+Para generar soluciones de Alto  Nivel, es necesario modificar los campos =slots= 
+de una instancia de =problem-solution-pair=. Se crean entoneces funciones que faciliten
+rellenar algunos de estos campos como la cantidad de clientes y la separacion de clientes en rutas; estos 
+requieren de funciones auxiliares que puedan devolver un numero aleatorio para 
+la cantidad de clientes y particiones aleatorias de un conjunto. 
+
+Para la generacion de numeros aleatorios usaremos la funcion =random= de 
+"vrp-random-number-generation.lisp" 
+
+Mientras que para generar premutaciones de clientes, particiones 
+de clientes en k rutas, seleccion aleatoria de un cliente, etc se tienen 
+un conjunto de funciones =permutation=, =k-partition=, =random-choice=, etc 
+en "vrp-utils.lisp"
+
+
+#+BEGIN_SRC lisp :results none :export code :tangle ./src/vrp-utils.lisp
+  (in-package :vrp)
+#+END_SRC
+
+
+utilizando estas funciones, agregaremos un par extra, una que cree una lista de clientes
+de cantidad aleatoria y otra que permita crear rutas, para 
+ello basta con permutar a los clientes y hacer una k-particion de ellos. 
+
+
+
+#+BEGIN_SRC lisp :results none :export code :tangle ./src/vrp-utils.lisp
+	       (defun make-clients (&optional max-clients-number)
+
+		   (let* ((n (if (null max-clients-number) 
+				(random 15 2)
+				(random max-clients-number 1))))
+		       (loop for i from 1 to n 
+			   collect i)))
+
+	       (defun make-routes(client-list &optional routes-number)
+
+		   (let*   ((k (if (or (null routes-number) (>= routes-number (length client-list)))
+				   (random (1- (length client-list)) 1) 
+				   routes-number))
+			   (client-permutation (permutation client-list)))
+			   (k-partition k client-permutation)))
+
+	       (defun power-set (set &optional (index 0))
+		  (if (= index (length set)) '(())
+		      (let* ((item-i (nth index set)) 
+			     (without-i (power-set set (1+ index)))
+			     (with-i (loop for list in without-i
+					   collect (push item-i list))))
+                             (append with-i without-i)
+			))) 
+
+#+END_SRC
+
+*** Test
+
+#+BEGIN_SRC lisp :results output 
+
+  (format t "Make-clients: ~a~%" (make-clients))
+  (format t "Make-clients with max: ~a~%" (make-clients 20))
+  (format t "Make-routes: ~a~%" (make-routes (make-clients)))
+  (format t "Power-set: ~a~%" (power-set '(1 2 3 4 5)))
+
+
+#+END_SRC
+
+#+RESULTS:
+: Make-clients: (1 2 3)
+: Make-clients with max: (1 2 3 4 5 6 7 8 9 10 11 12 13)
+: Make-routes: ((2 1))
+: Power-set: ((1 2 3 4 5) (1 2 3 4) (1 2 3 5) (1 2 3) (1 2 4 5) (1 2 4) (1 2 5)
+:             (1 2) (1 3 4 5) (1 3 4) (1 3 5) (1 3) (1 4 5) (1 4) (1 5) (1)
+:             (2 3 4 5) (2 3 4) (2 3 5) (2 3) (2 4 5) (2 4) (2 5) (2) (3 4 5)
+:             (3 4) (3 5) (3) (4 5) (4) (5) NIL)
+
+
+* Generador de soluciones a alto nivel 
+
+Para el generador de soluciones se tiene una funcion generica =generate-solution-by-condition= 
+que recibe una instancia de un *problem-solution-pair* , una *caracteristica* y una *estrategia de alto nivel*
+y en dependencia de la caracteristica y la estrategia modifica la pareja problema-solucion. 
+
+    #+BEGIN_SRC lisp :results none :export code :tangle ./src/vrp-generate-solution.lisp
+
+		  (in-package :vrp)
+
+		  (defgeneric generate-solution-by-condition (characteristic
+							      high-level-strategy
+							      problem-solution
+							      stream))
+
+		  (defmethod generate-solution-by-condition (characteristic
+							      high-level-strategy
+							      problem-solution
+							      stream)
+		      (format stream "IN Main method~%"))
+    #+END_SRC
+
+
+** Generar soluciones por caracteristica para basic-strategy 
+
+Es necesario definir el comportamiento de cada caracteristica para una 
+*estrategia de alto nivel* , en este caso =basic-estrategy= que es la unica que existe 
+por el momento. 
+
+*** visit-each-client-at-least-once 
+
+#+BEGIN_SRC lisp :results none :export code :tangle ./src/vrp-generate-solution.lisp
+
+     (defmethod generate-solution-by-condition :after
+						 ((characteristic visit-each-client-at-least-once)
+					       (high-level-strategy basic-strategy)
+					        problem-solution
+					        stream)
+	 (format stream "IN visit-each-client-at-least-once~%")
+
+	 (if (not (clients problem-solution))
+		 (setf (clients problem-solution) (make-clients)))
+
+	 (format stream "clients: ~a~%" (clients problem-solution))
+
+	 (if (not (routes problem-solution))
+		 (setf (routes problem-solution) (make-routes (clients problem-solution))))
+
+	 (format stream "routes: ~a~%" (routes problem-solution))
+
+
+     )
+
+#+END_SRC
+
+***** TEST
+
+
+#+BEGIN_SRC lisp :results output
+  (progn
+
+   (defclass test-1-description (visit-each-client-at-least-once) ())
+
+   (defclass test-1-ps (has-clients has-routes) ())
+
+  (Generate-solution-by-condition (make-instance 'test-1-description) (make-instance 'basic-strategy) (make-instance 'test-1-ps)))
+
+#+END_SRC
+
+#+RESULTS:
+: IN Main method
+: IN visit-each-client-at-least-once
+: clients: (1 2 3 4 5 6)
+: routes: ((2) (1 4 3 5 6))
+
+
+*** visit-client-at-most-once 
+
+#+BEGIN_SRC lisp :results none :export code :tangle ./src/vrp-generate-solution.lisp
+
+    (defmethod generate-solution-by-condition :after
+						((characteristic visit-client-at-most-once)
+					         (high-level-strategy basic-strategy)
+					         problem-solution
+						 stream)
+	(format stream "IN  visit-client-at-most-once~%")
+
+	(generate-solution-by-condition (make-instance 'visit-each-client-at-least-once) high-level-strategy problem-solution stream)
+
+    )
+
+#+END_SRC
+
+***** TEST
+
+#+BEGIN_SRC lisp :results output
+  (progn
+   (defclass test-2-description (visit-client-at-most-once) ())
+
+   (defclass test-2-ps (has-clients has-routes) ())
+
+  (Generate-solution-by-condition (make-instance 'test-2-description) (make-instance 'basic-strategy) (make-instance 'test-2-ps) t))
+
+#+END_SRC
+
+#+RESULTS:
+: IN Main method
+: IN  visit-client-at-most-once
+: IN Main method
+: IN visit-each-client-at-least-once
+: clients: (1 2 3 4 5 6 7)
+: routes: ((1 3 4 5) (7 6) (2))
+
+
+*** begin-in-depot
+
+#+BEGIN_SRC lisp :results none :export code :tangle ./src/vrp-generate-solution.lisp
+
+    (defmethod generate-solution-by-condition :after
+						((characteristic begin-in-depot)
+					    (high-level-strategy basic-strategy)
+					    problem-solution
+					    stream)
+
+       (format stream "IN  begin-in-depot~%")
+
+	(if (not (routes problem-solution))
+	    (generate-solution-by-condition (make-instance 'visit-each-client-at-least-once) high-level-strategy problem-solution stream))
+
+  
+       (setf (routes problem-solution) (loop for r in (routes problem-solution) 
+					  collecting (push 0 r)))
+      
+       (format stream "routes begin in depot: ~a~%" (routes problem-solution)))
+
+#+END_SRC
+
+***** TEST
+
+#+BEGIN_SRC lisp :results output
+  (progn
+
+   (defclass test-3-description (begin-in-depot) ())
+
+   (defclass test-3-ps (has-clients has-routes) ())
+
+  (Generate-solution-by-condition (make-instance 'test-3-description) (make-instance 'basic-strategy) (make-instance 'test-3-ps)))
+
+#+END_SRC
+
+#+RESULTS:
+: IN Main method
+: IN  begin-in-depot
+: IN Main method
+: IN visit-each-client-at-least-once
+: clients: (1 2 3 4 5 6)
+: routes: ((2) (3) (1 6 5 4))
+: routes brgin in depot: ((0 2) (0 3) (0 1 6 5 4))
+
+
+*** end-in-depot
+
+#+BEGIN_SRC lisp :results none :export code :tangle ./src/vrp-generate-solution.lisp
+
+    (defmethod generate-solution-by-condition :after
+						((characteristic end-in-depot)
+					    (high-level-strategy basic-strategy)
+					    problem-solution
+					    stream)
+
+       (format stream "IN end-in-depot~%")
+
+	(if (not (routes problem-solution))
+	    (generate-solution-by-condition (make-instance 'visit-each-client-at-least-once) high-level-strategy problem-solution stream))
+
+  
+       (setf (routes problem-solution) (loop for r in (routes problem-solution) 
+					  collecting (append r '(0))))
+      
+       (format stream "routes end in depot: ~a~%" (routes problem-solution)))
+
+#+END_SRC
+
+***** TEST
+
+#+BEGIN_SRC lisp :results output
+  (progn
+
+   (defclass test-3-description (end-in-depot) ())
+
+   (defclass test-3-ps (has-clients has-routes) ())
+
+  (Generate-solution-by-condition (make-instance 'test-3-description) (make-instance 'basic-strategy) (make-instance 'test-3-ps)))
+
+#+END_SRC
+
+#+RESULTS:
+: IN Main method
+: IN end-in-depot
+: IN Main method
+: IN visit-each-client-at-least-once
+: clients: (1 2 3 4 5 6 7 8 9 10 11 12)
+: routes: ((7 3 4 10) (2) (11 8 9) (12) (6) (1) (5))
+: routes end in depot: ((7 3 4 10 0) (2 0) (11 8 9 0) (12 0) (6 0) (1 0) (5 0))
+
+*** dont-overload-vehicle 
+
+#+BEGIN_SRC lisp :results none :export code :tangle ./src/vrp-generate-solution.lisp
+
+      (defmethod generate-solution-by-condition :after
+						  ((characteristic dont-overload-vehicle)
+						   (high-level-strategy basic-strategy)
+						    problem-solution
+						    stream)
+
+	(format stream "IN dont-overload-vehicle~%")
+
+	(if (not (routes problem-solution))
+	    (generate-solution-by-condition (make-instance 'visit-each-client-at-least-once) high-level-strategy problem-solution stream))
+
+
+	 (setf (demand problem-solution) (loop for i in (clients problem-solution)
+					     collecting (random 100 1)))
+	 (setf (demand problem-solution) (push 0 (demand problem-solution)))
+
+	 (format stream "demands: ~a~%" (demand problem-solution))
+
+	(let* ((values (loop for r in (routes problem-solution)
+			    collecting (loop for i in r
+				    sum (nth i (demand problem-solution))))))
+
+	  (format stream "values: ~a~%" values)
+	  (format stream "max value: ~a~%" (eval `(max ,@values)))
+
+	  (setf (capacity problem-solution) (random (+(eval `(max ,@values)) 20) (eval `(max ,@values))))
+
+	  (format stream "capacity: ~a~%" (capacity problem-solution))))
+
+#+END_SRC
+
+
+***** TEST
+
+#+BEGIN_SRC lisp :results output
+  (progn
+    (defclass test-4-description (dont-overload-vehicle) ())
+
+   (defclass test-4-ps (has-clients has-routes has-demand has-capacity) ())
+
+  (Generate-solution-by-condition (make-instance 'test-4-description) (make-instance 'basic-strategy) (make-instance 'test-4-ps)))
+
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+IN Main method
+IN dont-overload-vehicle
+IN Main method
+IN visit-each-client-at-least-once
+clients: (1 2 3 4 5 6 7 8 9 10 11 12 13)
+routes: ((8 7 4 9 2 13 1 3 10 6 5 11 12))
+demands: (0 96 40 88 3 15 39 56 39 76 61 85 81 31)
+values: (710)
+max value: 710
+capacity: 717
+#+end_example
+
+
+
+**  Generar soluciones por caracteristica opuesta para basic-strategy 
+
+*** dont-visit-each-client-at-least-once 
+
+#+BEGIN_SRC lisp :results none :export code :tangle ./src/vrp-generate-solution.lisp
+
+	    (defmethod generate-solution-by-condition :after
+							((characteristic dont-visit-each-client-at-least-once)
+						    (high-level-strategy basic-strategy)
+						    problem-solution
+							stream)
+
+	       (format stream "IN dont-visit-each-client-at-least-once~%")
+
+	       (if (not (clients problem-solution))
+		       (setf (clients problem-solution) (make-clients)))
+
+	       (format stream "clients: ~a~%" (clients problem-solution))
+
+	       (if (not (routes problem-solution))
+		       (let*  ((n (random (length (clients problem-solution)) 1))
+			       (taken-clients (nthcar n (permutation (clients problem-solution)))))
+			  (setf (routes problem-solution) (make-routes taken-clients))))
+
+	       (format stream "routes: ~a~%" (routes problem-solution)))
+
+#+END_SRC
+
+***** TEST
+
+#+BEGIN_SRC lisp :results output
+  (progn
+
+  (defclass test-5-description (dont-visit-each-client-at-least-once) ())
+
+  (defclass test-5-ps (has-clients has-routes) ())
+
+  (Generate-solution-by-condition (make-instance 'test-5-description) (make-instance 'basic-strategy) (make-instance 'test-5-ps)))
+
+#+END_SRC
+
+#+RESULTS:
+: IN Main method
+: IN dont-visit-each-client-at-least-once
+: clients: (1 2 3 4 5 6 7 8 9 10 11 12)
+: routes: ((2 4 11) (6 9) (10 3 1 8) (5))
+
+
+
+*** visit-client-more-than-once 
+
+#+BEGIN_SRC lisp :results none :export code :tangle ./src/vrp-generate-solution.lisp
+
+    (defmethod generate-solution-by-condition :after
+						((characteristic visit-client-more-than-once)
+					    (high-level-strategy basic-strategy)
+					    problem-solution
+						stream)
+
+	 (format stream "IN visit-client-more-than-once~%")
+
+	 (if (not (routes problem-solution))
+		  (generate-solution-by-condition (make-instance 'visit-each-client-at-least-once) high-level-strategy problem-solution stream))
+
+	 (let* ((actual-routes (routes problem-solution))
+		(rep-client (random-choice (random-choice actual-routes)))
+		(route-to-insert-index (random (length actual-routes)))
+		(route-to-insert (nth route-to-insert-index actual-routes))
+		(new-route (permutation (push rep-client route-to-insert))))
+
+	      (setf (routes problem-solution) (append (nthcar route-to-insert-index actual-routes) (list new-route) (nthcdr (1+ route-to-insert-index) actual-routes) ))
+
+	      (format stream "repeated-client: ~a~%" rep-client)
+	   )
+
+	 (format stream "routes-repeated-client: ~a~%" (routes problem-solution))
+      )
+
+#+END_SRC
+
+***** TEST
+
+#+BEGIN_SRC lisp :results output
+  (progn
+
+  (defclass test-6-description (visit-client-more-than-once) ())
+
+  (defclass test-6-ps (has-clients has-routes) ())
+
+  (Generate-solution-by-condition (make-instance 'test-6-description) (make-instance 'basic-strategy) (make-instance 'test-6-ps)))
+
+#+END_SRC
+
+#+RESULTS:
+: IN Main method
+: IN visit-client-more-than-once
+: IN Main method
+: IN visit-each-client-at-least-once
+: clients: (1 2 3 4 5 6 7 8)
+: routes: ((6 2 3 5 4) (1) (7 8))
+: repeated-client: 8
+: routes-repeated-client: ((6 2 3 5 4) (1) (7 8 8))
+
+
+*** begin-anywhere
+
+#+BEGIN_SRC lisp :results none :export code :tangle ./src/vrp-generate-solution.lisp
+
+    (defmethod generate-solution-by-condition :after
+						((characteristic begin-anywhere)
+					    (high-level-strategy basic-strategy)
+					    problem-solution
+						 stream)
+
+       (format stream "IN begin-anywhere~%")
+
+      (if (not (routes problem-solution))
+	  (generate-solution-by-condition (make-instance 'visit-each-client-at-least-once) high-level-strategy problem-solution stream))
+
+
+      (let* ((n (random (length (routes problem-solution)) 1))
+	     (indexes (loop for i from 0 to n collecting (random (length (routes problem-solution)))))
+	     (new-routes (loop for r in (routes problem-solution)
+			       for i from 0 to (length (routes problem-solution))
+			       collecting (if (member i indexes)
+					      r
+					      (push 0 r)))))
+	  (setf (routes problem-solution) new-routes))
+
+     (format stream "routes that begin anywhere: ~a~%" (routes problem-solution)))
+
+#+END_SRC
+
+***** TEST
+
+#+BEGIN_SRC lisp :results output
+  (progn
+
+  (defclass test-7-description (begin-anywhere) ())
+
+  (defclass test-7-ps (has-clients has-routes) ())
+
+  (Generate-solution-by-condition (make-instance 'test-7-description) (make-instance 'basic-strategy) (make-instance 'test-7-ps)))
+
+#+END_SRC
+
+#+RESULTS:
+: IN Main method
+: IN begin-anywhere
+: IN Main method
+: IN visit-each-client-at-least-once
+: clients: (1 2 3 4 5 6 7 8 9 10 11)
+: routes: ((2 10 8 5 9 7) (4 6) (3 1) (11))
+: routes that begin anywhere: ((2 10 8 5 9 7) (4 6) (0 3 1) (0 11))
+
+
+*** end-anywhere
+
+#+BEGIN_SRC lisp :results none :export code :tangle ./src/vrp-generate-solution.lisp
+
+    (defmethod generate-solution-by-condition :after
+						((characteristic end-anywhere)
+					    (high-level-strategy basic-strategy)
+					    problem-solution
+						stream )
+
+       (format stream "IN  end-anywhere~%")
+
+      (if (not (routes problem-solution))
+	  (generate-solution-by-condition (make-instance 'visit-each-client-at-least-once) high-level-strategy problem-solution stream))
+
+
+      (let* ((n (random (length (routes problem-solution)) 1))
+	     (indexes (loop for i from 0 to n collecting (random (length (routes problem-solution)))))
+	     (new-routes (loop for r in (routes problem-solution)
+			       for i from 0 to (length (routes problem-solution))
+			       collecting (if (member i indexes)
+					      r
+					      (append r '(0))))))
+	  (setf (routes problem-solution) new-routes))
+
+     (format stream "routes that end anywhere: ~a~%" (routes problem-solution)))
+
+#+END_SRC
+
+***** TEST
+
+#+BEGIN_SRC lisp :results output
+  (progn
+
+  (defclass test-7-description (end-anywhere) ())
+
+  (defclass test-7-ps (has-clients has-routes) ())
+
+  (Generate-solution-by-condition (make-instance 'test-7-description) (make-instance 'basic-strategy) (make-instance 'test-7-ps)))
+
+#+END_SRC
+
+#+RESULTS:
+: IN Main method
+: IN  end-anywhere
+: IN Main method
+: IN visit-each-client-at-least-once
+: clients: (1 2 3 4 5 6 7)
+: routes: ((1 6 2 3) (5 4) (7))
+: routes that end anywhere: ((1 6 2 3 0) (5 4) (7))
+
+
+*** overload-vehicle 
+
+#+BEGIN_SRC lisp :results none :export code :tangle ./src/vrp-generate-solution.lisp
+
+      (defmethod generate-solution-by-condition :after
+						  ((characteristic overload-vehicles)
+					      (high-level-strategy basic-strategy)
+					      problem-solution
+						  stream )
+	    (format stream "IN overload-vehicle~%")
+
+	(if (not (routes problem-solution))
+	    (generate-solution-by-condition (make-instance 'visit-each-client-at-least-once) high-level-strategy problem-solution stream))
+
+
+	 (setf (demand problem-solution) (loop for i in (clients problem-solution)
+					     collecting (random 100 1)))
+	 (setf (demand problem-solution) (push 0 (demand problem-solution)))
+
+	 (format stream "demands: ~a~%" (demand problem-solution))
+
+	 (let* ((values (loop for r in (routes problem-solution)
+			    collecting (loop for i in r
+				    sum (nth i (demand problem-solution))))))
+
+	  (format stream "values: ~a~%" values)
+	  (format stream "max value: ~a~%" (eval `(max ,@values)))
+
+	  (setf (capacity problem-solution) (random (1- (eval `(max ,@values))) ))
+
+	  (format stream "capacity: ~a~%" (capacity problem-solution))))
+
+#+END_SRC
+
+***** TEST
+
+#+BEGIN_SRC lisp :results output
+  (progn
+
+  (defclass test-8-description (overload-vehicles) ())
+
+  (defclass test-8-ps (has-clients has-routes has-demand has-capacity) ())
+
+  (Generate-solution-by-condition (make-instance 'test-8-description) (make-instance 'basic-strategy) (make-instance 'test-8-ps)))
+
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+IN Main method
+IN overload-vehicle
+IN Main method
+IN visit-each-client-at-least-once
+clients: (1 2)
+routes: ((2 1))
+demands: (0 1 86)
+values: (87)
+max value: 87
+capacity: 25
+#+end_example

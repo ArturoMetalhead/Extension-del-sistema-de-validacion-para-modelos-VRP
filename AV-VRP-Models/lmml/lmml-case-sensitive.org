@@ -1,0 +1,1120 @@
+#+AUTHOR: Fernando Raul Rodriguez Flores
+
+* Description
+  In this file I'll write the functions needed to make lmml case-sensitive.
+
+  
+* file to load everything
+** description
+   In this section we'll add a file to load everything
+** code
+   #+begin_src lisp :results none :export code :tangle src/load-lmml-user.lisp
+   (defun fload (filename)
+        (let* ((dot-string (make-string (cl:- 40 (cl:+ 3 (length filename)))
+                                        :initial-element #\.)))
+          (format t "Loading ~a ..." filename)
+          (load filename)
+          (format t "~a OK~%" dot-string)))
+
+   ;; (fload "src/lmml-user-package.lisp")
+   (fload "src/lmml-case-sensitivity.lisp")
+   #+end_src
+
+
+* package definition
+
+** description
+   In this section we define the package.
+   This is no longer needed since everything will be on the lmml package.
+** code
+   #+begin_src lisp :results none :export code
+   (defpackage :lmml-user
+     (:use :lmml-core :cl))
+   #+end_src
+
+
+
+* functions to make the package case sensitive
+  
+** description
+
+   In this section, we add the functions that allows us to write lmml models in a case sensitive way.
+
+   The src codes in the section will be tangled to the file =lmml-user-functions.lisp=.
+   
+** add the package to the file
+   #+begin_src lisp :results none :export code :tangle src/lmml-case-sensitivity.lisp
+   (in-package :lmml)
+   #+end_src
+
+** function to make the reader case (in)sensitive
+*** description
+    This functions modifies the read table to make it case (in)sensitive.
+*** turn-on-case-sensitivity
+**** code
+     #+begin_src lisp :results none :export code :tangle src/lmml-case-sensitivity.lisp
+     (defun turn-on-case-sensitivity ()
+       "Just make the *readtable* case sensitive"
+       (setf (readtable-case *readtable*) :preserve))
+    #+end_src
+**** tests (where made in the REPL)
+*** turn-off-case-sensitivity
+**** code
+     #+begin_src lisp :results none :export code :tangle src/lmml-case-sensitivity.lisp
+     (defun turn-off-case-sensitivity ()
+       "Just make the *readtable* case sensitive"
+       (SETF (READTABLE-CASE *READTABLE*) :UPCASE))
+    #+end_src
+**** tests (where made in the REPL)
+*** check-case-sensitivity
+**** code
+     #+begin_src lisp :results none :export code :tangle src/lmml-case-sensitivity.lisp
+     (defun check-case-sensitivity ()
+       "Returns the case of the current readtable."
+       (READTABLE-CASE *READTABLE*))
+    #+end_src
+**** tests (where made in the REPL)
+
+
+* case-sensitive versions of the lmml api
+
+** description
+   In this section we add case sensitive versions of the functions in lmml.  To do that we make the reader case sensitive and create the new functions.
+
+** functions related to the case sensitivity
+*** macro make-case-sensitive-version-of-function
+**** description
+     The idea is to create a lower-case version of each function (and macro and symbol) in the lmml public api.  In all cases we have to do the same operations:
+
+     #+begin_src lisp
+     (SETF (SYMBOL-FUNCTION 'turn-off-case-sensitivity)
+          (SYMBOL-FUNCTION 'TURN-OFF-CASE-SENSITIVITY))
+     #+end_src
+
+     And that can be done easily with a macro.
+
+**** code
+    #+begin_src lisp :results none :export code :tangle src/lmml-case-sensitivity.lisp
+    (defmacro make-case-sensitive-version-of-function (symbol)
+      `(SETF (SYMBOL-FUNCTION ',(INTERN (STRING-DOWNCASE (SYMBOL-NAME symbol))))
+              (SYMBOL-FUNCTION ',(INTERN (STRING-UPCASE (SYMBOL-NAME symbol))))))
+    #+end_src
+
+**** tests
+***** testing macroexpansion
+      #+begin_src lisp :results none :export code :tangle src/tests.lisp
+      (make-case-sensitive-version-of turn-off-case-sensitivity)  
+      #+end_src
+*** macro make-case-sensitive-version-of-symbol
+**** description
+     The idea is to create a lower-case version of each symbol in the lmml public api.  In all cases we have to do the same operations:
+
+     #+begin_src lisp
+     (SETF (SYMBOL-VALUE 'binary-variable)
+           (SYMBOL-VALUE 'BINARY-VARIABLE))
+     #+end_src
+
+     And that can be done easily with a macro.
+
+**** code
+    #+begin_src lisp :results none :export code :tangle src/lmml-case-sensitivity.lisp
+    (defmacro make-case-sensitive-version-of-symbol (symbol)
+      `(DEFPARAMETER ,(INTERN (STRING-DOWNCASE (SYMBOL-NAME symbol)))
+             ,(INTERN (STRING-UPCASE (SYMBOL-NAME symbol)))))
+    #+end_src
+
+**** tests
+***** testing macroexpansion
+      #+begin_src lisp :results none :export code :tangle src/tests.lisp
+      (make-case-sensitive-version-of-symbol binary-variable)
+      #+end_src
+*** macro make-case-sensitive-version-of-macro
+**** description
+     The idea is to create a lower-case version of each macro in the lmml public api.  In all cases we have to do the same operations:
+
+     #+begin_src lisp
+     (SETF (MACRO-FUNCTION 'make-case-sensitive-version-of-function)
+          (MACRO-FUNCTION 'MAKE-CASE-SENSITIVE-VERSION-OF-FUNCTION))
+     #+end_src
+
+     And that can be done easily with a macro.
+
+**** code
+    #+begin_src lisp :results none :export code :tangle src/lmml-case-sensitivity.lisp
+    (defmacro make-case-sensitive-version-of-macro (symbol)
+      `(SETF (MACRO-FUNCTION ',(INTERN (STRING-DOWNCASE (SYMBOL-NAME symbol))))
+              (MACRO-FUNCTION ',(INTERN (STRING-UPCASE (SYMBOL-NAME symbol))))))
+    #+end_src
+
+**** tests
+***** testing macroexpansion
+      #+begin_src lisp :results none :export code :tangle src/tests.lisp
+      (make-case-sensitive-version-of turn-off-case-sensitivity)  
+      #+end_src
+*** first let's make the reader case sensitive
+    #+begin_src lisp :results none :export code :tangle src/lmml-case-sensitivity.lisp
+    (turn-on-case-sensitivity)
+    #+end_src
+
+*** make-case-sensitive-version-of-macro
+     #+begin_src lisp :results none :export code :tangle src/lmml-case-sensitivity.lisp
+     (MAKE-CASE-SENSITIVE-VERSION-OF-MACRO 
+           make-case-sensitive-version-of-macro)
+     #+end_src
+*** make-case-sensitive-version-of-symbol
+     #+begin_src lisp :results none :export code :tangle src/lmml-case-sensitivity.lisp
+     (MAKE-CASE-SENSITIVE-VERSION-OF-MACRO 
+           make-case-sensitive-version-of-symbol)
+     #+end_src
+*** make-case-sensitive-version-of-function
+     #+begin_src lisp :results none :export code :tangle src/lmml-case-sensitivity.lisp
+     (make-case-sensitive-version-of-macro 
+           make-case-sensitive-version-of-function)
+     #+end_src
+*** turn-on-case-sensitivity
+     #+begin_src lisp :results none :export code :tangle src/lmml-case-sensitivity.lisp
+     (make-case-sensitive-version-of-function turn-on-case-sensitivity)
+     #+end_src
+*** turn-off-case-sensitivity
+     #+begin_src lisp :results none :export code :tangle src/lmml-case-sensitivity.lisp
+     (make-case-sensitive-version-of-function turn-off-case-sensitivity)
+     #+end_src
+*** check-case-sensitivity
+     #+begin_src lisp :results none :export code :tangle src/lmml-case-sensitivity.lisp
+     (make-case-sensitive-version-of-function check-case-sensitivity)
+     #+end_src
+** lowercase versions of lisp functions and macros 
+*** defparameter
+**** code
+      #+begin_src lisp :results none :export code :tangle src/lmml-case-sensitivity.lisp
+      (make-case-sensitive-version-of-macro defparameter)
+      #+end_src
+*** list
+**** code
+      #+begin_src lisp :results none :export code :tangle src/lmml-case-sensitivity.lisp
+      (make-case-sensitive-version-of-function list)
+      #+end_src
+
+** functions to describe a problem
+
+*** description
+    In this section, we are going to add the case-sensitive versions of the functions and macros needed to create a problem.
+
+    To organize the process, I'll use the same examples that were used in the section actuas-problems.
+    
+*** binary-variable
+**** code
+      #+begin_src lisp :results none :export code :tangle src/lmml-case-sensitivity.lisp
+      (make-case-sensitive-version-of-symbol binary-variable)
+      #+end_src
+**** tests
+     #+begin_src lisp :results none :export code :tangle src/tests.lisp
+     (LET* ((lang (GMPL-LANGUAGE))
+            (node1 binary-variable)
+            (node2 BINARY-VARIABLE))
+       (PROGN
+         (BFORMAT T "Testing case-sensitivity of binary-variable")
+         (GENERATE-CODE node1 lang T) (TERPRI)
+         (GENERATE-CODE node2 lang T) (TERPRI)
+         ))
+     #+end_src
+
+*** continuous-variable
+**** code
+      #+begin_src lisp :results none :export code :tangle src/lmml-case-sensitivity.lisp
+      (make-case-sensitive-version-of-symbol continuous-variable)
+      #+end_src
+**** tests
+     #+begin_src lisp :results none :export code :tangle src/tests.lisp
+     (LET* ((lang (GMPL-LANGUAGE))
+            (node1 continuous-variable)
+            (node2 CONTINUOUS-VARIABLE))
+       (PROGN
+         (BFORMAT T "Testing case-sensitivity of continuous-variable")
+         (GENERATE-CODE node1 lang T) (TERPRI)
+         (GENERATE-CODE node2 lang T) (TERPRI)
+         ))
+     #+end_src
+
+*** integer-variable
+**** code
+      #+begin_src lisp :results none :export code :tangle src/lmml-case-sensitivity.lisp
+      (make-case-sensitive-version-of-symbol integer-variable)
+      #+end_src
+**** tests
+     #+begin_src lisp :results none :export code :tangle src/tests.lisp
+     (LET* ((lang (GMPL-LANGUAGE))
+            (node1 integer-variable)
+            (node2 INTEGER-VARIABLE))
+       (PROGN
+         (BFORMAT T "Testing case-sensitivity of integer-variable")
+         (GENERATE-CODE node1 lang T) (TERPRI)
+         (GENERATE-CODE node2 lang T) (TERPRI)
+         ))
+     #+end_src
+
+*** variable-declaration
+**** rewriting the macro heading
+***** description
+      In this section I'll rewrite the heading of the function, to call the uppercase version.  This is needed to make the keywords case sensitive.
+***** code
+       #+begin_src lisp :results none :export code :tangle src/lmml-case-sensitivity.lisp
+       (DEFMACRO variable-declaration (name &KEY
+                                              (var-type CONTINUOUS-VARIABLE)
+                                              (lower-bound 0)
+                                              upper-bound
+                                              doc
+                                              domain)
+  
+         `(VARIABLE-DECLARATION ,name
+                                :VAR-TYPE ,var-type
+                                :LOWER-BOUND ,lower-bound
+                                :UPPER-BOUND ,upper-bound
+                                :DOC ,doc
+                                :DOMAIN ,domain))
+       #+end_src
+***** tests
+      #+begin_src lisp :results none :export code :tangle src/tests.lisp
+      (LET* ((lang (GMPL-LANGUAGE))
+             (node1 (variable-declaration x))
+             (node2 (variable-declaration X))
+             (node3 (variable-declaration X-2))
+             (node4 (variable-declaration mixed-CASE_vAr))
+             (node5 (variable-declaration x :var-type binary-variable)))
+        (PROGN
+          (BFORMAT T "Testing case-sensitivity of variable-declaration")
+          (GENERATE-CODE node1 lang T) (TERPRI)
+          (GENERATE-CODE node2 lang T) (TERPRI)
+          (GENERATE-CODE node3 lang T) (TERPRI)
+          (GENERATE-CODE node4 lang T) (TERPRI)
+          (GENERATE-CODE node5 lang T) (TERPRI)
+          ))
+      #+end_src
+**** +using the macro+
+***** code
+       #+begin_src lisp :results none :export code
+       (make-case-sensitive-version-of-macro variable-declaration)
+       #+end_src
+***** tests
+      #+begin_src lisp :results none :export code
+      (LET* ((lang (GMPL-LANGUAGE))
+             (node1 (variable-declaration x))
+             (node2 (variable-declaration X))
+             (node3 (variable-declaration X-2))
+             (node4 (variable-declaration mixed-CASE_vAr))
+             (node5 (variable-declaration x :VAR-TYPE binary-variable)))
+        (PROGN
+          (BFORMAT T "Testing case-sensitivity of variable-declaration")
+          (GENERATE-CODE node1 lang T) (TERPRI)
+          (GENERATE-CODE node2 lang T) (TERPRI)
+          (GENERATE-CODE node3 lang T) (TERPRI)
+          (GENERATE-CODE node4 lang T) (TERPRI)
+          (GENERATE-CODE node5 lang T) (TERPRI)
+          ))
+      #+end_src
+*** maximize
+**** code
+***** description
+      In this section I'll rewrite the heading of the function, to call the uppercase version.  This is needed to make the keyword arguments case sensitive.
+***** code
+       #+begin_src lisp :results none :export code :tangle src/lmml-case-sensitivity.lisp
+       (DEFUN maximize (id func &KEY doc)
+         (MAXIMIZE id func :DOC doc))
+       #+end_src
+***** tests
+****** simple-test
+      #+begin_src lisp :results none :export code :tangle src/tests.lisp
+      (LET* ((node1 (maximize 1 'function))
+             (node2 (maximize 2 'function
+                              :doc "An obj function to maximize")))
+        (BFORMAT T "Testing maximize")
+        (FORMAT T "just basic:~% ~a~%" node1)
+        (FORMAT T "with doc:~% ~a~%" node2))
+      #+end_src
+
+****** code generation
+       #+begin_src lisp :results none :export code :tangle src/tests.lisp
+       (LET* ((lang (GMPL-LANGUAGE))
+              (node1 (maximize "obj1" (+ (* 2 'x)
+                                    (+ 4 'y))))
+              (node2 (maximize 1 (+ (* 2 'x)
+                                    (+ 4 'y))
+                               :doc "A lowercase minimize")))
+         (PROGN
+           (BFORMAT T "Testing case-sensitivity of maximize")
+
+           (GENERATE-CODE node1 lang T) (TERPRI)
+           (GENERATE-CODE node2 lang T) (TERPRI)))
+       #+end_src
+*** minimize
+**** code
+***** description
+      In this section I'll rewrite the heading of the function, to call the uppercase version.  This is needed to make the keyword arguments case sensitive.
+***** code
+       #+begin_src lisp :results none :export code :tangle src/lmml-case-sensitivity.lisp
+       (DEFUN minimize (id func &KEY doc)
+         (MINIMIZE id func :DOC doc))
+       #+end_src
+***** tests
+****** simple-test
+      #+begin_src lisp :results none :export code :tangle src/tests.lisp
+      (LET* ((node1 (minimize 1 'function))
+             (node2 (minimize 2 'function
+                              :doc "An obj function to minimize")))
+        (BFORMAT T "Testing minimize")
+        (FORMAT T "just basic:~% ~a~%" node1)
+        (FORMAT T "with doc:~% ~a~%" node2))
+      #+end_src
+
+****** code generation
+       #+begin_src lisp :results none :export code :tangle src/tests.lisp
+       (LET* ((lang (GMPL-LANGUAGE))
+              (node1 (minimize "obj1" (+ (* 2 'x)
+                                    (+ 4 'y))))
+              (node2 (minimize 1 (+ (* 2 'x)
+                                    (+ 4 'y))
+                               :doc "A lowercase minimize")))
+         (PROGN
+           (BFORMAT T "Testing case-sensitivity of minimize")
+
+           (GENERATE-CODE node1 lang T) (TERPRI)
+           (GENERATE-CODE node2 lang T) (TERPRI)))
+       #+end_src
+*** for-all-quantifier
+**** layer1
+***** documentation
+      As this is a simple function, we can use the macro.
+***** code
+       #+begin_src lisp :results none :export code :tangle src/lmml-case-sensitivity.lisp
+       (make-case-sensitive-version-of-function for-all-quantifier)
+       #+end_src
+***** tests
+      #+begin_src lisp :results none :export code :tangle src/tests.lisp
+      (LET* ((lang (GMPL-LANGUAGE))
+             (node1 (for-all-quantifier 'i 'J))
+             (node2 (for-all-quantifier 'j 'J)))
+        (PROGN
+          (BFORMAT T "Testing case-sensitivity of for-all-quantifier")
+          (FORMAT T "First let's print the nodes~%")
+          (FORMAT T "~a~%" node1)
+          (FORMAT T "~a~%" node2)
+          (FORMAT T "Now let's generate the code~%")
+          (GENERATE-CODE node1 lang T) (TERPRI)
+          (GENERATE-CODE node2 lang T) (TERPRI)
+          ))
+      #+end_src
+*** constraint
+**** rewriting the macro heading
+***** description
+      In this section I'll rewrite the heading of the function, to call the uppercase version.  This is needed to make the keywords case sensitive.
+***** code
+       #+begin_src lisp :results none :export code :tangle src/lmml-case-sensitivity.lisp
+       (DEFMACRO constraint (id func &KEY quantifiers doc)
+
+         `(CONSTRAINT ,id ,func :QUANTIFIERS ,quantifiers
+                                :DOC ,doc))
+       #+end_src
+***** tests
+      #+begin_src lisp :results none :export code :tangle src/tests.lisp
+      (LET* ((lang (GMPL-LANGUAGE))
+             (node1 (constraint 1 (< 'x 5)))
+             (node2 (constraint 2 (< ['x i] 5)
+                                :quantifiers
+                                ((for-all-quantifier i 'I))))
+             (node3 (constraint 3 (< ['x i] ['z j])
+                                :quantifiers
+                                ((for-all-quantifier i 'Y)
+                                 (for-all-quantifier j 'Y))))
+             )
+        (PROGN
+          (BFORMAT T "Testing case-sensitivity of constraint")
+          (GENERATE-CODE node1 lang T) (TERPRI)
+          (GENERATE-CODE node2 lang T) (TERPRI)
+          (GENERATE-CODE node3 lang T) (TERPRI)
+          ))
+      #+end_src
+*** problem-node
+**** layer1
+***** documentation
+      As this is a simple function, we can use the macro.
+***** code
+       #+begin_src lisp :results none :export code :tangle src/lmml-case-sensitivity.lisp
+       (make-case-sensitive-version-of-function problem-node)
+       #+end_src
+***** tests
+      #+begin_src lisp :results none :export code :tangle src/tests.lisp
+      (LET* ((lang (GMPL-LANGUAGE))
+             (node1 (problem-node "example 1"  1 2 3 4))
+             )
+        (PROGN
+          (BFORMAT T "Testing case-sensitivity of problem-node")
+          (FORMAT T "First let's print the nodes~%")
+          (FORMAT T "~a~%" node1)
+          (FORMAT T "Now let's generate the code~%")
+          (GENERATE-CODE node1 lang T) (TERPRI)
+          ))
+      #+end_src
+**** layer2
+***** documentation
+      As this is a simple function, we can use the macro.
+***** code
+       #+begin_src lisp :results none :export code :tangle src/lmml-case-sensitivity.lisp
+       (make-case-sensitive-version-of-macro problem)
+       #+end_src
+***** tests
+      #+begin_src lisp :results none :export code :tangle src/tests.lisp
+      (LET* ((lang (GMPL-LANGUAGE))
+             (node1 (problem-node "example 1"  1 2 3 4))
+             )
+        (PROGN
+          (BFORMAT T "Testing case-sensitivity of problem-node")
+          (FORMAT T "First let's print the nodes~%")
+          (FORMAT T "~a~%" node1)
+          (FORMAT T "Now let's generate the code~%")
+          (GENERATE-CODE node1 lang T) (TERPRI)
+          ))
+      #+end_src
+*** +standard-data-reader+
+**** code
+      #+begin_src lisp :results none :export code :tangle src/lmml-case-sensitivity.lisp
+      (make-case-sensitive-version-of-symbol +standard-data-reader+)
+      #+end_src
+**** tests
+     #+begin_src lisp :results none :export code :tangle src/tests.lisp
+     (LET* ((lang (GMPL-LANGUAGE))
+            (node1 +STANDARD-DATA-READER+)
+            (node2 +standard-data-reader+))
+       (PROGN
+         (BFORMAT T "Testing case-sensitivity of binary-variable")
+         (FORMAT T "~A~%" node1)
+         (FORMAT T "~A~%" node2)))
+     #+end_src
+*** parameter-declaration-node
+**** rewriting the macro heading
+***** description
+      In this section I'll rewrite the heading of the macro, to call the uppercase version.  This is needed to make the keywords case sensitive.
+***** code
+       #+begin_src lisp :results none :export code :tangle src/lmml-case-sensitivity.lisp
+       (DEFMACRO parameter (name &KEY
+                                   domain
+                                   doc
+                                   value
+                                   (data-reader +standard-data-reader+))
+
+         `(PARAMETER ,name
+                     :DOMAIN ,domain 
+                     :DOC ,doc
+                     :VALUE ,value
+                     :DATA-READER ,data-reader))
+       #+end_src
+***** tests
+      #+begin_src lisp :results none :export code :tangle src/tests.lisp
+      (LET* ((lang (GMPL-LANGUAGE))
+             (node1 (parameter p))
+             (node2 (parameter P2 :domain '(I)))
+             (node3 (parameter Pp :domain '(I Ji)))
+             (node4 (parameter pP :value 5))
+             (node5 (parameter q_P :value 5
+                               :doc "A documentation"))
+             )
+        (PROGN
+          (BFORMAT T "Testing case-sensitivity of constraint")
+          (GENERATE-CODE node1 lang T) (TERPRI)
+          (GENERATE-CODE node2 lang T) (TERPRI)
+          (GENERATE-CODE node3 lang T) (TERPRI)
+          (GENERATE-CODE node4 lang T) (TERPRI)
+          (GENERATE-CODE node5 lang T) (TERPRI)
+          ))
+      #+end_src
+*** index-at
+**** layer1
+***** documentation
+      As this is a simple function, we can use the macro.
+***** code
+       #+begin_src lisp :results none :export code :tangle src/lmml-case-sensitivity.lisp
+       (make-case-sensitive-version-of-function index-at)
+       #+end_src
+***** tests
+      #+begin_src lisp :results none :export code :tangle src/tests.lisp
+      (LET* ((lang (GMPL-LANGUAGE))
+             (node1 (index-at 'x 1 2 3 4))
+             (node2 ['y 1 'i])
+             )
+        (PROGN
+          (BFORMAT T "Testing case-sensitivity of index-at")
+          (FORMAT T "First let's print the nodes~%")
+          (FORMAT T "~a~%" node1)
+          (FORMAT T "~a~%" node2)
+          (FORMAT T "Now let's generate the code~%")
+          (GENERATE-CODE node1 lang T) (TERPRI)
+          (GENERATE-CODE node2 lang T) (TERPRI)
+          ))
+      #+end_src
+*** range-node
+**** rewriting the function heading
+***** description
+      In this section I'll rewrite the heading of the function, to call the uppercase version.  This is needed to make the keywords case sensitive.
+***** code
+       #+begin_src lisp :results none :export code :tangle src/lmml-case-sensitivity.lisp
+       (DEFUN range (min-value max-value &KEY (increment 1))
+
+         (RANGE min-value max-value :INCREMENT increment))
+       #+end_src
+***** tests
+      #+begin_src lisp :results none :export code :tangle src/tests.lisp
+      (LET* ((lang (GMPL-LANGUAGE))
+             (node1 (range 1 5))
+             (node2 (range 1 5 :increment 2))
+             )
+        (PROGN
+          (BFORMAT T "Testing case-sensitivity of range")
+          (FORMAT T "Printing the node:~%")
+          (FORMAT T "~a~%" node1)
+          (FORMAT T "~a~%" node2)
+          (GENERATE-CODE node1 lang T) (TERPRI)
+          (GENERATE-CODE node2 lang T) (TERPRI)
+          ))
+      #+end_src
+*** set-declaration-node
+**** rewriting the macro heading
+***** description
+      In this section I'll rewrite the heading of the macro, to call the uppercase version.  This is needed to make the keywords case sensitive.
+***** code
+       #+begin_src lisp :results none :export code :tangle src/lmml-case-sensitivity.lisp
+       (DEFMACRO set (name &KEY
+                             dimension
+                             value
+                             doc
+                             (data-reader +standard-data-reader+))
+
+         `(SET ,name
+               :DIMENSION ,dimension 
+               :VALUE ,value
+               :DOC ,doc
+               :DATA-READER ,data-reader))
+       #+end_src
+***** tests
+      #+begin_src lisp :results none :export code :tangle src/tests.lisp
+      (LET* ((lang (GMPL-LANGUAGE))
+             (node1 (set s))
+             (node2 (set S1 :dimension 2))
+             (node3 (set S-max :value '(1 2 3)))
+             (node4 (set xvM :value '(1 2 3)
+                                          :doc "A set documentation"))
+             (node5 (set T12 :dimension (+ 1 1)))
+             (node6 (set TS_45p :value {1 (+ 1 1) 3}))
+             (node7 (set S12_O-12 :value {(range 1 3)}))
+             )
+        (PROGN
+          (BFORMAT T "Testing case-sensitivity of constraint")
+          (GENERATE-CODE node1 lang T) (TERPRI)
+          (GENERATE-CODE node2 lang T) (TERPRI)
+          (GENERATE-CODE node3 lang T) (TERPRI)
+          (GENERATE-CODE node4 lang T) (TERPRI)
+          (GENERATE-CODE node5 lang T) (TERPRI)
+          (GENERATE-CODE node6 lang T) (TERPRI)
+          (GENERATE-CODE node7 lang T) (TERPRI)
+          ))
+      #+end_src
+*** solve
+**** layer1
+***** documentation
+      As this is a simple function, we can use the macro.
+***** code
+       #+begin_src lisp :results none :export code :tangle src/lmml-case-sensitivity.lisp
+       (make-case-sensitive-version-of-function solve)
+       #+end_src
+***** tests
+      #+begin_src lisp :results none :export code :tangle src/tests.lisp
+      (LET* ((lang (GMPL-LANGUAGE))
+             (node1 (solve))
+             )
+        (PROGN
+          (BFORMAT T "Testing case-sensitivity of index-at")
+          (FORMAT T "First let's print the nodes~%")
+          (FORMAT T "~a~%" node1)
+          (FORMAT T "Now let's generate the code~%")
+          (GENERATE-CODE node1 lang T) (TERPRI)
+          ))
+      #+end_src
+*** display
+**** layer1
+***** documentation
+      As this is a simple function, we can use the macro.
+***** code
+       #+begin_src lisp :results none :export code :tangle src/lmml-case-sensitivity.lisp
+       (make-case-sensitive-version-of-function display)
+       #+end_src
+***** tests
+      #+begin_src lisp :results none :export code :tangle src/tests.lisp
+      (LET* ((lang (GMPL-LANGUAGE))
+             (x (VAR-REF 'x))
+             (node1 (display x))
+             (node2 (display [x 1]))
+             )
+        (PROGN
+          (BFORMAT T "Testing case-sensitivity of index-at")
+          (FORMAT T "First let's print the nodes~%")
+          (FORMAT T "~a~%" node1)
+          (FORMAT T "~a~%" node2)
+          (FORMAT T "Now let's generate the code~%")
+          (GENERATE-CODE node1 lang T) (TERPRI)
+          (GENERATE-CODE node2 lang T) (TERPRI)
+          ))
+      #+end_src
+*** sumf (layer 2)
+**** documentation
+     As this is a simple macro, we can use the macro.
+**** code
+      #+begin_src lisp :results none :export code :tangle src/lmml-case-sensitivity.lisp
+      (make-case-sensitive-version-of-macro sumf)
+      #+end_src
+**** tests
+     #+begin_src lisp :results none :export code :tangle src/tests.lisp
+     (LET* ((lang (GMPL-LANGUAGE))
+            (J-decl (SET-DECLARATION-NODE "J"))
+            (J (SET-REF "J" J-decl))
+            (node1 (sumf ((j in J)) (+ j 2)))
+            (node2 (sumf ((i in J) (j in J) ) (+ i j)))
+            (node3 (sumf ((i in J) (< i 5)) (+ i 2)))
+            (node4 (sumf ((i from 1 to 5)) (+ i 2)))
+            (node5 (sumf ((i from 1 to 5)
+                          (j from 1 to 10) )
+                         (+ i j)))
+            (node6 (sumf ((i from 1 to 10) (< i 5) ) (+ i 2)))
+            )
+       (PROGN
+         (BFORMAT T "Testing case-sensitivity of index-at")
+         (FORMAT T "First let's print the nodes~%")
+         (FORMAT T "~a~%" node1)
+         (FORMAT T "~a~%" node2)
+         (FORMAT T "~a~%" node3)
+         (FORMAT T "~a~%" node4)
+         (FORMAT T "~a~%" node5)
+         (FORMAT T "~a~%" node6)
+         (FORMAT T "Now let's generate the code~%")
+         (GENERATE-CODE node1 lang T) (TERPRI)
+         (GENERATE-CODE node2 lang T) (TERPRI)
+         ))
+     #+end_src
+*** set-value-of-param
+**** documentation
+     As this is a simple function, we can use the macro.
+**** code
+      #+begin_src lisp :results none :export code :tangle src/lmml-case-sensitivity.lisp
+      (make-case-sensitive-version-of-function set-value-of-param)
+      #+end_src
+**** tests
+     #+begin_src lisp :results none :export code :tangle src/tests.lisp
+     (LET* ((lang (GMPL-LANGUAGE))
+            (param-decl-1 (PARAMETER-DECLARATION-NODE "P"))
+            (P (PARAM-REF "P" param-decl-1))
+            (node1 (set-value-of-param P 5))
+            (node2 (set-value-of-param P 8 +standard-data-reader+))
+            (sdecl (SET-DECLARATION-NODE "S" :VALUE {1 2 3}
+                                         :CURRENT-VALUE {1 2 3}))
+            (S (SET-REF "S" sdecl))
+            (param-decl2 (PARAMETER-DECLARATION-NODE "parameter2"
+                                                     :DOMAIN {S}))
+            (parameter2 (PARAM-REF "parameter2" param-decl2))
+            (node3 (set-value-of-param parameter2 '(one two three)))
+            )
+       (PROGN
+         (BFORMAT T "Testing case-sensitivity of set-value-of-param")
+         (FORMAT T "First let's print the nodes~%")
+         (FORMAT T "~a~%" node1)
+         (FORMAT T "~a~%" node2)
+         (FORMAT T "~a~%" node3)
+    
+         (FORMAT T "Now let's generate the code~%")
+         (GENERATE-CODE node1 lang T) (TERPRI)
+         (GENERATE-CODE node2 lang T) (TERPRI)
+         (GENERATE-CODE node3 lang T) (TERPRI)
+         ))
+     #+end_src
+*** set-value-of-set
+**** documentation
+     As this is a simple function, we can use the macro.
+**** code
+      #+begin_src lisp :results none :export code :tangle src/lmml-case-sensitivity.lisp
+      (make-case-sensitive-version-of-function set-value-of-set)
+      #+end_src
+**** tests
+     #+begin_src lisp :results none :export code :tangle src/tests.lisp
+     (LET* ((lang (GMPL-LANGUAGE))
+            (set-decl (SET-DECLARATION-NODE "S1"
+                                            :DOC "A documented set"))
+            (S1 (SET-REF "S1" set-decl))
+            (node1 (set-value-of-set S1 '(1 2 3 4 5)))
+            (node2 (set-value-of-set S1 '(one TWO three)))
+            (node3 (set-value-of-set S1 '("one" "two" "three")))
+            (node4 (set-value-of-set S1 (range 5 10)))
+            (node5 (set-value-of-set S1 (range 5 10 :increment 2)))
+            )
+       (PROGN
+         (BFORMAT T "Testing case-sensitivity of set-value-of-param")
+         (FORMAT T "First let's print the nodes~%")
+         (FORMAT T "~a~%" node1)
+         (FORMAT T "~a~%" node2)
+         (FORMAT T "~a~%" node3)
+
+         (FORMAT T "Now let's generate the code~%")
+         (GENERATE-CODE node1 lang T) (TERPRI)
+         (GENERATE-CODE node2 lang T) (TERPRI)
+         (GENERATE-CODE node3 lang T) (TERPRI)
+         (GENERATE-CODE node4 lang T) (TERPRI)
+         (GENERATE-CODE node5 lang T) (TERPRI)
+         ))
+     #+end_src
+*** data-section
+**** layer2
+***** documentation
+      As this is a simple function, we can use the macro.
+***** code
+       #+begin_src lisp :results none :export code :tangle src/lmml-case-sensitivity.lisp
+       (make-case-sensitive-version-of-function data-section)
+       #+end_src
+***** tests
+      #+begin_src lisp :results none :export code :tangle src/tests.lisp
+      (LET* ((lang (GMPL-LANGUAGE))
+             (p1-decl (PARAMETER-DECLARATION-NODE "p"))
+             (p1 (PARAM-REF "p" p1-decl))
+             (s-decl (SET-DECLARATION-NODE "S"))
+             (S (SET-REF "S" s-decl))
+             (node1 (data-section))
+             (set-p (set-value-of-param p1 5))
+             (node2 (data-section set-p))
+             (set-s (set-value-of-set S '(1 2 3)))
+             (node3 (data-section set-s))
+             (node4 (data-section set-p set-s))
+             )
+        (PROGN
+          (BFORMAT T "Testing case-sensitivity of data-section")
+          (FORMAT T "First let's print the nodes~%")
+          (FORMAT T "~a~%" node1)
+          (FORMAT T "~a~%" node2)
+          (FORMAT T "~a~%" node3)
+          (FORMAT T "~a~%" node4)
+
+          (FORMAT T "Now let's generate the code~%")
+          (GENERATE-CODE node1 lang T) (TERPRI)
+          (GENERATE-CODE node2 lang T) (TERPRI)
+          (GENERATE-CODE node3 lang T) (TERPRI)
+          (GENERATE-CODE node4 lang T) (TERPRI)
+          ))
+      #+end_src
+** functions and symbols from lmml (not the problem elements)
+*** description
+    In this section, we'll add the lowercase version of lmml functions and symbols that are not problem elements.
+*** generate-code
+**** code
+      #+begin_src lisp :results none :export code :tangle src/lmml-case-sensitivity.lisp
+      (make-case-sensitive-version-of-function generate-code)
+      #+end_src
+**** tests
+     #+begin_src lisp :results none :export code :tangle src/tests.lisp
+     (LET* ((lang (GMPL-LANGUAGE))
+            (node1 (variable-declaration x :var-type binary-variable)))
+       (PROGN
+         (BFORMAT T "Testing case-sensitivity of binary-variable")
+         (generate-code node1 lang T) (TERPRI)
+         ))
+     #+end_src
+*** gmpl
+**** code
+      #+begin_src lisp :results none :export code :tangle src/lmml-case-sensitivity.lisp
+      (make-case-sensitive-version-of-symbol gmpl)
+      #+end_src
+**** tests
+     #+begin_src lisp :results none :export code :tangle src/tests.lisp
+     (LET* ((lang gmpl)
+            (node1 (variable-declaration x :var-type binary-variable)))
+       (PROGN
+         (BFORMAT T "Testing case-sensitivity of binary-variable")
+         (generate-code node1 lang T) (TERPRI)
+         ))
+     #+end_src
+*** t
+**** code
+      #+begin_src lisp :results none :export code :tangle src/lmml-case-sensitivity.lisp
+      (make-case-sensitive-version-of-symbol t)
+      #+end_src
+**** tests
+     #+begin_src lisp :results none :export code :tangle src/tests.lisp
+     (LET* ((lang gmpl)
+            (node1 (variable-declaration x :var-type binary-variable)))
+       (PROGN
+         (BFORMAT t "Testing case-sensitivity of binary-variable")
+         (generate-code node1 lang t) (TERPRI)
+         ))
+     #+end_src
+*** bformat
+**** code
+      #+begin_src lisp :results none :export code :tangle src/lmml-case-sensitivity.lisp
+      (make-case-sensitive-version-of-function bformat)
+      #+end_src
+**** tests
+     #+begin_src lisp :results none :export code :tangle src/tests.lisp
+     (LET* ((lang gmpl)
+            (node1 (variable-declaration x :var-type binary-variable)))
+       (PROGN
+         (bformat t "Testing case-sensitivity of binary-variable")
+         (generate-code node1 lang t) (TERPRI)
+         ))
+     #+end_src
+*** terpri
+**** code
+      #+begin_src lisp :results none :export code :tangle src/lmml-case-sensitivity.lisp
+      (make-case-sensitive-version-of-function terpri)
+      #+end_src
+**** tests
+     #+begin_src lisp :results none :export code :tangle src/tests.lisp
+     (LET* ((lang gmpl)
+            (node1 (variable-declaration x :var-type binary-variable)))
+       (PROGN
+         (bformat t "Testing case-sensitivity of binary-variable")
+         (generate-code node1 lang t) (terpri)))
+     #+end_src
+
+   
+
+
+* lowercase problems
+
+** description
+   In this section I'll add some problems to test the lowercase version of the API.
+
+   They will be copied verbatim from the problems in [[file:lmml.org::*actual problems][actual problems]].
+** very simple problem (no params, no data, no quantifiers)
+*** description
+    The lc- in the name stands for lowercase ;-)
+*** code
+    #+begin_src lisp :results none :export code :tangle src/lmml-case-sensitivity-example.lisp
+    (defparameter lc-example-1
+      (problem-node "lower-case example1"
+                    (variable-declaration x :var-type binary-variable)
+                    (variable-declaration y)
+
+                    (maximize "obj" (+ (* 4 x)
+                                       (* 2 y)))
+
+                    (constraint "r1" (<= (+ x y) 3))))
+
+      #+end_src
+** simple problem with no data but params with layer 2
+   #+begin_src lisp :results none :export code :tangle src/lmml-case-sensitivity-example.lisp
+   (defparameter lc-example-2
+     (problem-node "lowercase example 2"
+                   (parameter c1 :value 4)
+                   (parameter c2 :value 2)
+                   (variable-declaration x :var-type binary-variable)
+                   (variable-declaration y)
+
+                   (maximize "obj" (+ (* c1 x)
+                                      (* c2 y)))
+
+                   (constraint "r1" (<= (+ x y) 3))))
+
+     #+end_src
+** simple problem with params and sets layer 2
+   #+begin_src lisp :results none :export code :tangle src/lmml-case-sensitivity-example.lisp
+   (defparameter lc-example-3
+     (problem-node "lowercase example 3"
+                   (set I :value {1 2})
+                   (parameter c1 :value 4)
+                   (parameter c2 :value 2)
+                   (variable-declaration x :domain {I}
+                                         :var-type binary-variable)
+
+                   (maximize "obj" (+ (* c1 (index-at x 1))
+                                      (* c2 (index-at x 2))))
+
+                   (constraint "r1" (<= (+ (index-at x 1)
+                                           (index-at x 2))
+                                        3))))
+
+     #+end_src
+** simple problem with params and sets using range
+   #+begin_src lisp :results none :export code :tangle src/lmml-case-sensitivity-example.lisp
+   (defparameter lc-example-4
+     (problem-node "example5"
+                   (parameter n :value 5)
+                   (set I :value (list (range 1 (+ n 1))))
+                   (parameter c1 :value 4)
+                   (parameter c2 :value 2)
+                   (variable-declaration x :domain (list I)
+                                         :var-type binary-variable)
+
+                   (maximize "obj" (+ (* c1 (index-at x 1))
+                                      (* c2 (index-at x 2))))
+
+                   (constraint "r1" (<= (+ (index-at x 1)
+                                                (index-at x 2))
+                                             n))
+
+                   (solve)
+                   (display x)
+                   ))
+
+     #+end_src
+** simple problem using {} and []
+   #+begin_src lisp :results none :export code :tangle src/lmml-case-sensitivity-example.lisp
+   (defparameter lc-example-5
+     (problem-node "lowercase example 5"
+                   (set I :value {1 2})
+                   (parameter c1 :value 4)
+                   (parameter c2 :value 2)
+                   (variable-declaration x :domain {I I}
+                                         :var-type binary-variable)
+
+                   (maximize "obj" (+ (* c1 [x 1 1])
+                                      (* c2 [x 2 1])))
+
+                   (constraint "r1" (<= (+ [x 1 1]
+                                           [x 2 1])
+                                        3))))
+
+     #+end_src
+** cvrp problem
+   #+begin_src lisp :results none :export code :tangle src/lmml-case-sensitivity-example.lisp
+   (defparameter lc-cvrp1-example
+     (problem-node "cvrp1"
+         (parameter n :doc "Number of clients")
+         (parameter P :doc "Capacity of the vehicles")
+         (parameter K :doc "Number of vehicles")
+         (parameter M :doc "Sum of the demands")
+         (set V :value {(range 1 n)} :doc "Set of clients")
+         (set VD :value {(range 0 (+ n 1))} :doc "Clients and depots")
+
+         (parameter c :domain {V V} :doc "Distance betweens clients")
+         (parameter d :domain {V} :doc "Demand of each client")
+
+
+         (variable-declaration x
+                               :var-type binary-variable
+                               :domain {VD VD}
+                               :doc "1 if client i is visited right before client j.")
+
+         (variable-declaration y
+                               :domain {VD VD}
+                               :doc "A variable to track the commodity flow")
+
+         (minimize "obj" (sumf ((i in VD))
+                               (sumf ((j in VD))
+                                     (* [x i j]
+                                        [c i j]))))
+
+         (constraint "r1"
+                     (= (sumf ((j in VD))
+                              (- [y j i] [y i j]))
+                        (* 2 [d i]))
+                     :quantifiers ((for-all-quantifier i V))
+                     :doc "Flow preserving condition")
+
+         (constraint "r2" (= (sumf ((j in V)) [y 0 j])
+                             M)
+                     :doc "All the demand leaves the depot")
+
+         (constraint "r3" (= (sumf ((j in V)) [y j 0])
+                             (- (* K P) M))
+                     :doc "The depot receives the remaining demand")
+
+         (constraint "r4" (= (sumf ((j in V)) [y (+ n 1) j])
+                             (* K P))
+                     :doc "Correct Yij values leaving the depot")
+
+         (constraint "r5" (= (+ [y i j] [y j i])
+                             (* P [x i j]))
+                     :quantifiers ((for-all-quantifier i VD)
+                                   (for-all-quantifier j VD))
+                     :doc "Relationship between Yij values at each node")
+
+         (constraint "r6" (= (sumf ((j in V))  (+ [x i j]
+                                                  [x j i]))
+                             2)
+                     :quantifiers ((for-all-quantifier i V))
+                     :doc "Each client is visited and departed exactly once.")
+
+         ))
+
+      #+end_src
+** example in the gmpl documentation
+   #+begin_src lisp :results none :export code :tangle src/lmml-case-sensitivity-example.lisp
+   (defparameter lc-gmpl-example
+         (problem-node "A transportation problem"
+
+             (set I :doc "Canning plants")
+
+             (set J :doc "Markets")
+
+
+             (parameter a :domain {I} :doc "Capacity of plant i in cases")
+
+             (parameter b :domain {J} :doc "Demand at market j in cases")
+
+
+             (parameter d :domain {I J} :doc "Distance in thousands of miles")
+
+             (parameter f :doc "Freight in dollars per case per thousand miles")
+
+             (parameter c :domain {I J}
+                        :doc "Transport cost in thousands of dollars per case")
+
+             (variable-declaration x
+                                   :domain {I J}
+                                   :doc "Shipment quantities in cases")
+
+
+
+             (minimize "cost" (sumf ((i in I))
+                                   (sumf ((j in J))
+                                         (* [c i j]
+                                            [x i j])))
+                       :doc "Total transportation costs in thousands of dollars.")
+
+             (constraint "supply"
+                         (<= (sumf ((j in J))
+                                   [x i j])
+                             [a i])
+                         :quantifiers ((for-all-quantifier i I))
+                         :doc "Observe supply limit at plant i")
+
+             (constraint "demand"
+                         (>= (sumf ((i in I))
+                                   [x i j])
+                             [b j])
+                         :quantifiers ((for-all-quantifier j J))
+                         :doc "Satisfy demand at market J")
+
+
+             (data-section
+              (set-value-of-set I (list "Seattle" "San-Diego"))
+
+              (set-value-of-set J (list "New-York" "Chicago" "Topeka"))
+
+              (set-value-of-param a '(350 600))
+
+              (set-value-of-param b '(325 300 275))
+
+              (set-value-of-param d '((2.5 1.7 1.8)
+                                      (2.5 1.8 1.4)))
+
+              (set-value-of-param f 90)
+
+              ;; c[i,j] = f * d[i, j] / 1000
+              ;; c[i,j] = d[i, j] * 0.09
+              (set-value-of-param c (list (list (CL:* 0.09 2.5)
+                                           (CL:* 0.09 1.7)
+                                           (CL:* 0.09 1.8))
+                                          (list (CL:* 0.09 2.5)
+                                           (CL:* 0.09 1.8)
+                                           (CL:* 0.09 1.4)))))))
+
+      #+end_src
+   
+
+* finally let's make the reader case-insensitive again
+  #+begin_src lisp :results none :export code :tangle src/lmml-case-sensitivity.lisp
+  (turn-off-case-sensitivity)
+  #+end_src
+   

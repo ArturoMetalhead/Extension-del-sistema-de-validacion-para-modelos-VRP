@@ -1,0 +1,106 @@
+#+TITLE: VRP variables and parameters
+#+AUTHOR: Alejandra Monzon Penna
+
+* Load Files 
+
+#+BEGIN_SRC lisp :results none
+  (load "src/vrp-load.lisp")
+#+END_SRC
+
+
+* Variables y Parametros
+
+Una vez que se tienen las *soluciones de alto nivel* obtenidas tras ejecutarse el 
+metodo =generat-solution-by-condition= se deben pasar estas soluciones a variables y 
+parametros para poder evaluar las restricciones del modelo. 
+
+Las variables y parametros involucrados en la modelacion de un VRP dependen de la 
+estrategis de modelacion. 
+
+Un CVRP modelado por =Flujo de vehiculos de dos indices exponencial= requiere de las siguientes 
+variables y parametros: 
+
+K: numero de vehiculos
+r(S): minimo numero de vehiculo para satisfacer las demandas de los clientes en S (cualquier subconjunto de clientes)
+xij: variable binaria que representa que el arco (i,j) esta en la solucion
+
+Un CVRP modelado por =Flujo de vehículos de dos índices polinomial= requiere: 
+
+K: numero de vehiculos
+C: capacidad de los vehiculos
+di: demanda del cliente i
+xij: variable binaria que representa que el arco (i,j) esta en la solucion
+ui: carga que tiene el vehículo después de visitar al cliente i 
+
+Un CVRP modelado por =Flujo de mercancias= requiere: 
+
+K: numero de vehiculos
+C: capacidad de los vehiculos
+di: demanda del cliente i
+xij: variable binaria que representa que el arco (i,j) esta en la solucion
+uij: Carga que tiene el vehiculo al recorrer el arco (i,j) uji= C - uij
+
+Cada una de estas estrategias a pesar de ser diferentes, tienen variables y parametros en comun
+=K, C, xij= que para estas 3 estrategias de modelacion siempre tienen el mismo significado. 
+Cada viariable y parametro puede obtenerse directamente del problema-solucion generado en el 
+Generador de soluciones de alto nivel, es decir no dependen una de otra, por lo que cada una en
+dependencia de su significado puede completar sus valores. 
+
+Para cada significado de variable/parametro se crea una clase que tenga un campo =slot= en el cual 
+se guardaran los valores de esta variable/parametro luego de extraerlos del problema-solucion.
+
+#+BEGIN_SRC lisp +n -r :results none :exports code :tangle ./src/vrp-variables-parameters.lisp
+  (in-package :vrp)
+  (defgeneric get-slot (var-param-set))
+
+  (defmacro def-variable-parameter (name slot-name)
+    `(progn (defclass ,name ()  
+	(,(make-slot-by-name slot-name)))
+
+     (defmethod get-slot ((var-param-set (eql ',name)))
+         ',slot-name )
+
+    ))
+
+#+END_SRC
+
+Definiendo todos los parametros y variables de las estrategias planteadas al inicio.
+
+#+BEGIN_SRC lisp +n -r :results none :exports code :tangle ./src/vrp-variables-parameters.lisp
+
+  (def-variable-parameter number-vehicles K)
+
+  (def-variable-parameter capacity-vehicles C)
+
+  (def-variable-parameter vehicle-goes-from-client-i-to-j x-ij)
+
+  (def-variable-parameter demand-each-client d-i)
+
+  (def-variable-parameter min-vehicles-subset r-S)
+
+  (def-variable-parameter vehicles-charge-after-client-i u-i)
+
+  (def-variable-parameter vehicles-charge-residual-from-client-i-to-j u-ij)
+
+  (def-variable-parameter client-set v-0)
+
+  (def-variable-parameter client-depot-set V)
+
+  (def-variable-parameter number-clients n)
+
+#+END_SRC
+
+Para tener una estrategia de modelacion se crea una clase que herede de las variables y parametros
+que necesite.
+
+
+#+BEGIN_SRC lisp +n -r :results none :exports code :tangle ./src/vrp-variables-parameters.lisp
+  
+    (defclass cvrp-two-indexes-exp-vehicle-flow (number-vehicles min-vehicles-subset vehicle-goes-from-client-i-to-j) ())
+
+    (defclass cvrp-two-indexes-poli-vehicle-flow (number-vehicles vehicle-goes-from-client-i-to-j demand-each-client capacity-vehicles vehicles-charge-after-client-i) ())
+
+    (defclass cvrp-commodity-flow (number-vehicles vehicle-goes-from-client-i-to-j demand-each-client capacity-vehicles vehicles-charge-residual-from-client-i-to-j) ())
+
+#+END_SRC
+

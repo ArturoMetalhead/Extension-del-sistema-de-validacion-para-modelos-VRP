@@ -1,0 +1,806 @@
+#+TITLE: VRP from high to low
+#+AUTHOR: Alejandra Monzon Penna
+
+
+* Load
+#+BEGIN_SRC lisp :results none
+  (load "src/vrp-load.lisp")
+#+END_SRC
+
+* Low level solution
+
+Una solucion de bajo nivel, es la traduccion de una solucion de alto nivel en variables y parametros. 
+Una vez definidos los parametros y variables a emplear, es necesario completar los valores a partir del 
+problema-solucion, para ello sedefine la funcion generica =form-high-to-low= que se especializa en cada
+clase de parametro/variable y utiliza =:after= para poder completar todos los campos correspondientes a 
+una estrategia de modelacion.
+
+#+BEGIN_SRC lisp +n -r :results none :exports code :tangle ./src/vrp-from-high-to-low.lisp
+      (in-package :vrp)
+
+      (defgeneric from-high-to-low (problem-solution  variable-parameter stream))
+
+      (defmethod from-high-to-low (problem-solution  variable-parameter stream )
+	(format stream "IN main method~%"))
+
+#+END_SRC
+
+** Generar la traduccion a cada variable/parametro 
+*** number-vehicles 
+
+#+BEGIN_SRC lisp +n -r :results none :exports code :tangle ./src/vrp-from-high-to-low.lisp
+
+    (defmethod from-high-to-low :after (problem-solution  
+				       (variable-parameter number-vehicles)
+				       stream) 
+	   (format stream "IN number-vehicles ~%")
+	   (setf (K variable-parameter) (length (routes problem-solution)))
+	   (format stream "K: ~a~%" (K variable-parameter))
+       )
+
+#+END_SRC
+
+***** TEST
+
+#+BEGIN_SRC lisp :results output
+  (progn
+
+   (defclass test-1-description (visit-each-client-at-least-once) ())
+
+   (defclass test-1-ps (has-clients has-routes) ())
+
+   (let* ((problem-sol-1 (make-instance 'test-1-ps)))
+	  (Generate-solution-by-condition (make-instance 'test-1-description) (make-instance 'basic-strategy) problem-sol-1 t)
+
+     (format t "~%Solucion de bajo nivel ~%")
+      (from-high-to-low problem-sol-1 (make-instance 'number-vehicles) t)
+     ))
+
+#+END_SRC
+
+#+RESULTS:
+: IN Main method
+: IN visit-each-client-at-least-once
+: clients: (1 2 3 4 5 6 7 8 9 10 11 12 13)
+: routes: ((12 4 7 9 11 2) (5 3 6 1) (10) (8) (13))
+: 
+: Solucion de bajo nivel 
+: IN number-vehicles 
+: K: 5
+
+*** capacity-vehicles 
+
+#+BEGIN_SRC lisp +n -r :results none :exports code :tangle ./src/vrp-from-high-to-low.lisp
+
+    (defmethod from-high-to-low :after (problem-solution 
+				       (variable-parameter capacity-vehicles)
+				       stream) 
+	   (format stream "IN number-vehicles ~%")
+
+	   (setf (C variable-parameter) (capacity problem-solution))
+
+	   (format stream "C: ~a~%" (capacity problem-solution))
+      )
+
+#+END_SRC
+
+***** TEST
+
+#+BEGIN_SRC lisp :results output
+  (progn
+
+   (defclass test-2-description (dont-overload-vehicle) ())
+
+   (defclass test-2-ps (has-clients has-routes has-capacity has-demand) ())
+
+   (let* ((problem-sol-2 (make-instance 'test-2-ps)))
+	  (Generate-solution-by-condition (make-instance 'test-2-description) (make-instance 'basic-strategy) problem-sol-2 t)
+
+     (format t "~%Solucion de bajo nivel ~%")
+      (from-high-to-low problem-sol-2 (make-instance 'capacity-vehicles) t)
+     ))
+
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+IN Main method
+IN dont-overload-vehicle
+IN Main method
+IN visit-each-client-at-least-once
+clients: (1 2 3 4 5 6 7 8 9 10 11 12)
+routes: ((11 7 6) (8 2 5 9) (4) (12) (3) (1) (10))
+demands: (0 95 39 42 15 28 3 55 45 60 75 48 27)
+values: (106 172 15 27 42 95 75)
+max value: 172
+capacity: 186
+
+Solucion de bajo nivel 
+IN number-vehicles 
+C: 186
+#+end_example
+
+*** vehicle-goes-from-client-i-to-j 
+
+#+BEGIN_SRC lisp +n -r :results none :exports code :tangle ./src/vrp-from-high-to-low.lisp
+
+    (defmethod from-high-to-low :after (problem-solution  
+				    (variable-parameter vehicle-goes-from-client-i-to-j)
+				     stream) 
+
+	(format stream "IN vehicle-goes-from-client-i-to-j ~%")
+	(let ((n (+ 2 (length (clients problem-solution)))))
+
+	    (setf (x-ij variable-parameter) (make-array (list n n) :initial-element 0))
+	    (loop for r in (routes problem-solution)
+		do (loop for i in r 
+			 for j in (cdr r)
+			do (if (eq j 0)
+				  (setf (aref (x-ij variable-parameter) i (1- n)) 1)
+				  (setf (aref (x-ij variable-parameter) i j) 1))
+
+
+			 )))
+
+	(format stream "x_ij: ~a~%" (x-ij variable-parameter))
+      )
+
+#+END_SRC
+
+***** TEST
+
+#+BEGIN_SRC lisp :cmdline results output
+  (progn
+
+   (defclass test-3-description (begin-in-depot end-in-depot) ())
+
+   (defclass test-3-ps (has-clients has-routes) ())
+
+   (let* ((problem-sol-3 (make-instance 'test-3-ps)))
+	  (Generate-solution-by-condition (make-instance 'test-3-description) (make-instance 'basic-strategy) problem-sol-3 t)
+
+     (format t "~%Solucion de bajo nivel ~%")
+      (from-high-to-low problem-sol-3 (make-instance 'vehicle-goes-from-client-i-to-j) t)
+     ))
+
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+IN Main method
+IN  begin-end-in-depot
+IN Main method
+IN visit-each-client-at-least-once
+clients: (1 2 3 4 5 6 7 8 9 10)
+routes: ((4 9 7) (3 8) (5 10 2 6 1))
+routes with depot: ((0 4 9 7 0) (0 3 8 0) (0 5 10 2 6 1 0))
+
+Solucion de bajo nivel 
+IN vehicle-goes-from-client-i-to-j 
+x_ij: #2A((0 0 0 1 1 1 0 0 0 0 0)
+          (1 0 0 0 0 0 0 0 0 0 0)
+          (0 0 0 0 0 0 1 0 0 0 0)
+          (0 0 0 0 0 0 0 0 1 0 0)
+          (0 0 0 0 0 0 0 0 0 1 0)
+          (0 0 0 0 0 0 0 0 0 0 1)
+          (0 1 0 0 0 0 0 0 0 0 0)
+          (1 0 0 0 0 0 0 0 0 0 0)
+          (1 0 0 0 0 0 0 0 0 0 0)
+          (0 0 0 0 0 0 0 1 0 0 0)
+          (0 0 1 0 0 0 0 0 0 0 0))
+#+end_example
+
+*** demand-each-client
+
+#+BEGIN_SRC lisp +n -r :results none :exports code :tangle ./src/vrp-from-high-to-low.lisp
+    
+	  (defmethod from-high-to-low :after (problem-solution  
+					  (variable-parameter demand-each-client)
+					  stream ) 
+	      (format stream "IN demand-each-client~%")
+	      (let ((n (1+ (length (clients problem-solution)))))
+    
+		  (setf (d-i variable-parameter) (make-array (list n) :initial-contents (loop for d in (demand problem-solution)
+								  collect d))))
+	      (format stream "d_i: ~a~%" (d-i variable-parameter))
+	    )
+
+#+END_SRC
+
+***** TEST
+
+#+BEGIN_SRC lisp :results output
+  (progn
+
+   (defclass test-4-description (dont-overload-vehicle) ())
+
+   (defclass test-4-ps (has-clients has-routes has-capacity has-demand) ())
+
+   (let* ((problem-sol-4 (make-instance 'test-4-ps)))
+	  (Generate-solution-by-condition (make-instance 'test-4-description) (make-instance 'basic-strategy) problem-sol-4 t)
+
+     (format t "~%Solucion de bajo nivel ~%")
+      (from-high-to-low problem-sol-4 (make-instance 'demand-each-client) t)
+     ))
+
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+IN Main method
+IN dont-overload-vehicle
+IN Main method
+IN visit-each-client-at-least-once
+clients: (1 2 3 4 5 6 7)
+routes: ((3 2 5) (4) (1 6 7))
+demands: (0 19 67 54 77 65 58 9)
+values: (186 77 86)
+max value: 186
+capacity: 203
+
+Solucion de bajo nivel 
+IN demand-each-client
+d_i: #(0 19 67 54 77 65 58 9)
+#+end_example
+
+*** min-vehicles-subset
+
+#+BEGIN_SRC lisp +n -r :results none :exports code :tangle ./src/vrp-from-high-to-low.lisp
+
+	(defmethod from-high-to-low :after (problem-solution  
+					   (variable-parameter min-vehicles-subset)
+					   stream)
+	  (format stream "IN min-vehicles-subset~%")
+    
+	  (let* ((p-set (power-set (clients problem-solution)))
+		(r (loop for s in p-set
+			 collecting (ceiling (loop for c in s sum (nth c (demand problem-solution))) (capacity problem-solution)) )))
+		(setf (r-S variable-parameter) (list p-set r)))
+
+	  (format stream "r(S): ~a~%" (r-S variable-parameter)))
+
+#+END_SRC
+
+***** TEST
+
+#+BEGIN_SRC lisp :results output
+  (progn
+
+   (defclass test-5-description (dont-overload-vehicle) ())
+
+   (defclass test-5-ps (has-clients has-routes has-capacity has-demand) ())
+
+   (let* ((problem-sol-5 (make-instance 'test-5-ps)))
+	  (Generate-solution-by-condition (make-instance 'test-5-description) (make-instance 'basic-strategy) problem-sol-5 t)
+
+     (format t "~%Solucion de bajo nivel ~%")
+     (from-high-to-low problem-sol-5 (make-instance 'min-vehicles-subset) t)))
+
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+IN Main method
+IN dont-overload-vehicle
+IN Main method
+IN visit-each-client-at-least-once
+clients: (1 2)
+routes: ((2 1))
+demands: (0 55 44)
+values: (99)
+max value: 99
+capacity: 114
+
+Solucion de bajo nivel 
+IN min-vehicles-subset
+r(S): (((1 2) (1) (2) NIL) (1 1 1 0))
+#+end_example
+
+*** vehicles-charge-after-client-i
+
+#+BEGIN_SRC lisp +n -r :results none :exports code :tangle ./src/vrp-from-high-to-low.lisp
+    
+       (defmethod from-high-to-low :after (problem-solution  
+					  (variable-parameter vehicles-charge-after-client-i)
+					  stream ) 
+    
+	     (format stream "IN vehicles-charge-after-client-i~%")  
+	     (let ((n (1+ (length (clients problem-solution))))
+		   (demand (demand problem-solution)))
+    
+		  (setf (u-i variable-parameter) (make-array (list n) :initial-element 0))
+		  (loop for r in (routes problem-solution)
+		      do (let ((temp 0))
+			      (loop for i in r 
+			      do (setf temp (+ temp (nth i demand)))
+				 (setf (aref (u-i variable-parameter) i) temp))))
+		  (setf (aref (u-i variable-parameter) 0) 0))
+	    (format stream "u_i: ~a~%" (u-i variable-parameter))
+	 )
+
+#+END_SRC
+
+***** TEST
+
+#+BEGIN_SRC lisp :results output
+  (progn
+
+   (defclass test-6-description (dont-overload-vehicle) ())
+
+   (defclass test-6-ps (has-clients has-routes has-capacity has-demand) ())
+
+   (let* ((problem-sol-6 (make-instance 'test-6-ps)))
+	  (Generate-solution-by-condition (make-instance 'test-6-description) (make-instance 'basic-strategy) problem-sol-6 t)
+
+     (format t "~%Solucion de bajo nivel ~%")
+     (from-high-to-low problem-sol-6 (make-instance 'vehicles-charge-after-client-i) t)))
+
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+IN Main method
+IN dont-overload-vehicle
+IN Main method
+IN visit-each-client-at-least-once
+clients: (1 2 3 4 5)
+routes: ((3 4) (2) (5 1))
+demands: (0 97 56 89 62 27)
+values: (151 56 124)
+max value: 151
+capacity: 164
+
+Solucion de bajo nivel 
+IN vehicles-charge-after-client-i
+u_i: #(0 124 56 89 151 27)
+#+end_example
+
+*** vehicles-charge-residual-from-client-i-to-j
+
+#+BEGIN_SRC lisp +n -r :results none :exports code :tangle ./src/vrp-from-high-to-low.lisp
+
+    (defmethod from-high-to-low :after (problem-solution  
+				       (variable-parameter vehicles-charge-residual-from-client-i-to-j)
+				       stream) 
+	   (format stream "IN vehicles-charge-residual-from-client-i-to-j~%")    
+	   (let ((n (+ 2 (length (clients problem-solution))))
+		(cap (capacity problem-solution)))
+
+	       (setf (u-ij variable-parameter) (make-array (list n n) :initial-element 0))
+	       (loop for r in (routes problem-solution)
+		   do (let ((temp (loop for client in r sum(nth client (demand problem-solution) ))))
+			   (loop for i in r
+				 for j in (cdr r)
+
+			   do (setf temp (- temp (nth i (demand problem-solution))))
+			      (if (eq j 0)
+				  (progn
+				     (setf (aref (u-ij variable-parameter) i (1- n)) temp)
+				     (setf (aref (u-ij variable-parameter) (1- n) i) (- cap temp)))
+				  (progn
+				     (setf (aref (u-ij variable-parameter) i j) temp)
+				     (setf (aref (u-ij variable-parameter) j i) (- cap temp)))
+
+
+				  )))))
+	      (format stream "u_ij: ~a~%"(u-ij variable-parameter)))
+
+#+END_SRC
+
+***** TEST
+
+#+BEGIN_SRC lisp :results output
+  (progn
+
+   (defclass test-7-description (dont-overload-vehicle begin-in-depot) ())
+
+   (defclass test-7-ps (has-clients has-routes has-capacity has-demand) ())
+
+   (let* ((problem-sol-7 (make-instance 'test-7-ps)))
+	  (Generate-solution-by-condition (make-instance 'test-7-description) (make-instance 'basic-strategy) problem-sol-7 t)
+
+     (format t "~%Solucion de bajo nivel ~%")
+     (from-high-to-low problem-sol-7 (make-instance 'vehicles-charge-residual-from-client-i-to-j) t)))
+
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+IN Main method
+IN  begin-in-depot
+IN Main method
+IN visit-each-client-at-least-once
+clients: (1 2 3 4 5 6 7)
+routes: ((3) (6 2 4 5 7) (1))
+routes brgin in depot: ((0 3) (0 6 2 4 5 7) (0 1))
+IN dont-overload-vehicle
+demands: (0 78 88 4 19 96 62 61)
+values: (4 326 78)
+max value: 326
+capacity: 340
+
+Solucion de bajo nivel 
+IN main method
+IN vehicles-charge-residual-from-client-i-to-j
+u_ij: #2A((0   78 0   4 0   0 326 0 0)
+          (262 0  0   0 0   0 0 0 0  )
+          (0   0  0   0 176 0 76 0 0)
+          (336 0  0   0 0   0 0 0 0)
+          (0   0  164 0 0   157 0 0 0)
+          (0   0  0   0 183 0 0 61 0)
+          (14  0  264 0 0   0 0 0 0)
+          (0   0  0   0 0   279 0 0 0)
+          (0   0  0   0 0   0 0 0 0))
+#+end_example
+
+*** client-set
+
+#+BEGIN_SRC lisp +n -r :results none :exports code :tangle ./src/vrp-from-high-to-low.lisp
+
+    (defmethod from-high-to-low :after (problem-solution  
+				       (variable-parameter client-set)
+				       stream)
+      (format stream "IN client-set~%")
+
+      (setf (v-0 variable-parameter) (clients problem-solution))
+
+      (format stream "V-0: ~a~%" (v-0 variable-parameter)))
+
+#+END_SRC
+
+***** TEST
+
+#+BEGIN_SRC lisp :results output
+  (progn
+
+   (defclass test-8-description (dont-overload-vehicle) ())
+
+   (defclass test-8-ps (has-clients has-routes has-capacity has-demand) ())
+
+   (let* ((problem-sol-8 (make-instance 'test-8-ps)))
+	  (Generate-solution-by-condition (make-instance 'test-8-description) (make-instance 'basic-strategy) problem-sol-8 t)
+
+     (format t "~%Solucion de bajo nivel ~%")
+     (from-high-to-low problem-sol-8 (make-instance 'client-set) t)))
+
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+IN Main method
+IN dont-overload-vehicle
+IN Main method
+IN visit-each-client-at-least-once
+clients: (1 2 3 4)
+routes: ((1 3 4 2))
+demands: (0 87 68 97 15)
+values: (267)
+max value: 267
+capacity: 272
+
+Solucion de bajo nivel 
+IN main method
+IN client-set
+V-0: (1 2 3 4)
+#+end_example
+
+*** client-depot-set
+
+#+BEGIN_SRC lisp +n -r :results none :exports code :tangle ./src/vrp-from-high-to-low.lisp
+
+    (defmethod from-high-to-low :after (problem-solution  
+				       (variable-parameter client-depot-set)
+				       stream)
+      (format stream "IN client-depot-set~%")
+
+      (setf (v variable-parameter) (append (push 0 (clients problem-solution)) (list (length (clients problem-solution)))))
+
+      (format stream "V: ~a~%" (v variable-parameter)))
+
+#+END_SRC
+
+***** TEST
+
+#+BEGIN_SRC lisp :results output
+  (progn
+
+   (defclass test-9-description (dont-overload-vehicle) ())
+
+   (defclass test-9-ps (has-clients has-routes has-capacity has-demand) ())
+
+   (let* ((problem-sol-9 (make-instance 'test-9-ps)))
+     (Generate-solution-by-condition (make-instance 'test-9-description) (make-instance 'basic-strategy) problem-sol-9 t)
+
+     (format t "~%Solucion de bajo nivel ~%")
+     (from-high-to-low problem-sol-9 (make-instance 'client-depot-set) t)))
+
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+IN Main method
+IN dont-overload-vehicle
+IN Main method
+IN visit-each-client-at-least-once
+clients: (1 2 3)
+routes: ((1 3 2))
+demands: (0 37 11 69)
+values: (117)
+max value: 117
+capacity: 132
+
+Solucion de bajo nivel 
+IN main method
+IN client-depot-set
+V: (0 1 2 3 4)
+#+end_example
+
+*** number-clients
+
+#+BEGIN_SRC lisp +n -r :results none :exports code :tangle ./src/vrp-from-high-to-low.lisp
+
+    (defmethod from-high-to-low :after (problem-solution  
+				       (variable-parameter number-clients)
+				       stream)
+      (format stream "IN number-clients~%")
+
+      (setf (n variable-parameter) (length (clients problem-solution)))
+
+      (format stream "n: ~a~%" (n variable-parameter)))
+
+#+END_SRC
+
+***** TEST
+
+#+BEGIN_SRC lisp :results output
+  (progn
+
+   (defclass test-10-description (dont-overload-vehicle) ())
+
+   (defclass test-10-ps (has-clients has-routes has-capacity has-demand) ())
+
+   (let* ((problem-sol-10 (make-instance 'test-10-ps)))
+	  (Generate-solution-by-condition (make-instance 'test-10-description) (make-instance 'basic-strategy) problem-sol-10 t)
+
+     (format t "~%Solucion de bajo nivel ~%")
+     (from-high-to-low problem-sol-10 (make-instance 'number-clients) t)))
+
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+IN Main method
+IN dont-overload-vehicle
+IN Main method
+IN visit-each-client-at-least-once
+clients: (1 2 3 4 5 6)
+routes: ((3 2) (5 1) (6 4))
+demands: (0 82 21 75 70 3 25)
+values: (96 85 95)
+max value: 96
+capacity: 108
+
+Solucion de bajo nivel 
+IN main method
+IN number-clients
+n: 6
+#+end_example
+
+* GENERAL EXAMPLE CVRP
+** Commodity FLow
+#+BEGIN_SRC lisp :results output
+  (let* ((characteristics (get-description-elements 'cvrp-description))
+	 (sorted (topologic-sort characteristics 'basic-strategy))
+	 (cvrp-sorted (eval `(progn (defclass x ,sorted ()) (make-instance 'x))))
+	 (p-sol (eval `(progn ,(def-problem-solution-pair p1 basic-strategy cvrp-description) (make-instance 'p1)))))
+
+	  (Generate-solution-by-condition cvrp-sorted (make-instance 'basic-strategy) p-sol t)
+	   (format t "~%Solucion de bajo nivel ~%")
+           (from-high-to-low p-sol (make-instance 'cvrp-commodity-flow) t)
+    )
+
+
+
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+IN Main method
+IN visit-each-client-at-least-once
+clients: (1 2 3 4 5 6 7 8 9)
+routes: ((3) (5 4 7) (6) (2 8 1) (9))
+IN  visit-client-at-most-once
+IN Main method
+IN visit-each-client-at-least-once
+clients: (1 2 3 4 5 6 7 8 9)
+routes: ((3) (5 4 7) (6) (2 8 1) (9))
+IN dont-overload-vehicle
+demands: (0 26 87 88 6 94 37 19 22 81)
+values: (88 119 37 135 81)
+max value: 135
+capacity: 143
+IN  begin-in-depot
+routes brgin in depot: ((0 3) (0 5 4 7) (0 6) (0 2 8 1) (0 9))
+IN end-in-depot
+routes end in depot: ((0 3 0) (0 5 4 7 0) (0 6 0) (0 2 8 1 0) (0 9 0))
+
+Solucion de bajo nivel 
+IN main method
+IN vehicles-charge-residual-from-client-i-to-j
+u_ij: #2A((0 0 135 88 0 119 37 0 0 81 0)
+          (0 0 0 0 0 0 0 0 117 0 0)
+          (8 0 0 0 0 0 0 0 48 0 0)
+          (55 0 0 0 0 0 0 0 0 0 0)
+          (0 0 0 0 0 118 0 19 0 0 0)
+          (24 0 0 0 25 0 0 0 0 0 0)
+          (106 0 0 0 0 0 0 0 0 0 0)
+          (0 0 0 0 124 0 0 0 0 0 0)
+          (0 26 95 0 0 0 0 0 0 0 0)
+          (62 0 0 0 0 0 0 0 0 0 0)
+          (0 143 0 143 0 0 143 143 0 143 0))
+IN number-vehicles 
+C: 143
+IN demand-each-client
+d_i: #(0 26 87 88 6 94 37 19 22 81)
+IN vehicle-goes-from-client-i-to-j 
+x_ij: #2A((0 0 1 1 0 1 1 0 0 1 0)
+          (0 0 0 0 0 0 0 0 0 0 1)
+          (0 0 0 0 0 0 0 0 1 0 0)
+          (0 0 0 0 0 0 0 0 0 0 1)
+          (0 0 0 0 0 0 0 1 0 0 0)
+          (0 0 0 0 1 0 0 0 0 0 0)
+          (0 0 0 0 0 0 0 0 0 0 1)
+          (0 0 0 0 0 0 0 0 0 0 1)
+          (0 1 0 0 0 0 0 0 0 0 0)
+          (0 0 0 0 0 0 0 0 0 0 1)
+          (0 0 0 0 0 0 0 0 0 0 0))
+IN number-vehicles 
+K: 5
+#+end_example
+
+** 2-indexes exponential Vehicle FLow
+#+BEGIN_SRC lisp :results output
+  (let* ((characteristics (get-description-elements 'cvrp-description))
+	 (sorted (topologic-sort characteristics 'basic-strategy))
+	 (cvrp-sorted (eval `(progn (defclass x ,sorted ()) (make-instance 'x))))
+	 (p-sol (eval `(progn ,(def-problem-solution-pair p1 basic-strategy cvrp-description) (make-instance 'p1)))))
+
+	  (Generate-solution-by-condition cvrp-sorted (make-instance 'basic-strategy) p-sol t)
+	   (format t "~%Solucion de bajo nivel ~%")
+           (from-high-to-low p-sol (make-instance 'cvrp-two-indexes-exp-vehicle-flow) t)
+    )
+
+
+
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+IN Main method
+IN visit-each-client-at-least-once
+clients: (1 2 3 4 5 6 7 8)
+routes: ((2 4) (3 5 6) (1) (7) (8))
+IN  visit-client-at-most-once
+IN Main method
+IN visit-each-client-at-least-once
+clients: (1 2 3 4 5 6 7 8)
+routes: ((2 4) (3 5 6) (1) (7) (8))
+IN dont-overload-vehicle
+demands: (0 70 32 70 43 43 97 67 68)
+values: (75 210 70 67 68)
+max value: 210
+capacity: 225
+IN  begin-end-in-depot
+routes with depot: ((0 2 4 0) (0 3 5 6 0) (0 1 0) (0 7 0) (0 8 0))
+
+Solucion de bajo nivel 
+IN main method
+IN vehicle-goes-from-client-i-to-j 
+x_ij: #2A((0 1 1 1 0 0 0 1 1)
+          (1 0 0 0 0 0 0 0 0)
+          (0 0 0 0 1 0 0 0 0)
+          (0 0 0 0 0 1 0 0 0)
+          (1 0 0 0 0 0 0 0 0)
+          (0 0 0 0 0 0 1 0 0)
+          (1 0 0 0 0 0 0 0 0)
+          (1 0 0 0 0 0 0 0 0)
+          (1 0 0 0 0 0 0 0 0))
+IN min-vehicles-subset
+r(S): (((1 2 3 4 5 6 7 8) (1 2 3 4 5 6 7) (1 2 3 4 5 6 8) (1 2 3 4 5 6)
+        (1 2 3 4 5 7 8) (1 2 3 4 5 7) (1 2 3 4 5 8) (1 2 3 4 5) (1 2 3 4 6 7 8)
+        (1 2 3 4 6 7) (1 2 3 4 6 8) (1 2 3 4 6) (1 2 3 4 7 8) (1 2 3 4 7)
+        (1 2 3 4 8) (1 2 3 4) (1 2 3 5 6 7 8) (1 2 3 5 6 7) (1 2 3 5 6 8)
+        (1 2 3 5 6) (1 2 3 5 7 8) (1 2 3 5 7) (1 2 3 5 8) (1 2 3 5)
+        (1 2 3 6 7 8) (1 2 3 6 7) (1 2 3 6 8) (1 2 3 6) (1 2 3 7 8) (1 2 3 7)
+        (1 2 3 8) (1 2 3) (1 2 4 5 6 7 8) (1 2 4 5 6 7) (1 2 4 5 6 8)
+        (1 2 4 5 6) (1 2 4 5 7 8) (1 2 4 5 7) (1 2 4 5 8) (1 2 4 5)
+        (1 2 4 6 7 8) (1 2 4 6 7) (1 2 4 6 8) (1 2 4 6) (1 2 4 7 8) (1 2 4 7)
+        (1 2 4 8) (1 2 4) (1 2 5 6 7 8) (1 2 5 6 7) (1 2 5 6 8) (1 2 5 6)
+        (1 2 5 7 8) (1 2 5 7) (1 2 5 8) (1 2 5) (1 2 6 7 8) (1 2 6 7) (1 2 6 8)
+        (1 2 6) (1 2 7 8) (1 2 7) (1 2 8) (1 2) (1 3 4 5 6 7 8) (1 3 4 5 6 7)
+        (1 3 4 5 6 8) (1 3 4 5 6) (1 3 4 5 7 8) (1 3 4 5 7) (1 3 4 5 8)
+        (1 3 4 5) (1 3 4 6 7 8) (1 3 4 6 7) (1 3 4 6 8) (1 3 4 6) (1 3 4 7 8)
+        (1 3 4 7) (1 3 4 8) (1 3 4) (1 3 5 6 7 8) (1 3 5 6 7) (1 3 5 6 8)
+        (1 3 5 6) (1 3 5 7 8) (1 3 5 7) (1 3 5 8) (1 3 5) (1 3 6 7 8) (1 3 6 7)
+        (1 3 6 8) (1 3 6) (1 3 7 8) (1 3 7) (1 3 8) (1 3) (1 4 5 6 7 8)
+        (1 4 5 6 7) (1 4 5 6 8) (1 4 5 6) (1 4 5 7 8) (1 4 5 7) (1 4 5 8)
+        (1 4 5) (1 4 6 7 8) (1 4 6 7) (1 4 6 8) (1 4 6) (1 4 7 8) (1 4 7)
+        (1 4 8) (1 4) (1 5 6 7 8) (1 5 6 7) (1 5 6 8) (1 5 6) (1 5 7 8) (1 5 7)
+        (1 5 8) (1 5) (1 6 7 8) (1 6 7) (1 6 8) (1 6) (1 7 8) (1 7) (1 8) (1)
+        (2 3 4 5 6 7 8) (2 3 4 5 6 7) (2 3 4 5 6 8) (2 3 4 5 6) (2 3 4 5 7 8)
+        (2 3 4 5 7) (2 3 4 5 8) (2 3 4 5) (2 3 4 6 7 8) (2 3 4 6 7) (2 3 4 6 8)
+        (2 3 4 6) (2 3 4 7 8) (2 3 4 7) (2 3 4 8) (2 3 4) (2 3 5 6 7 8)
+        (2 3 5 6 7) (2 3 5 6 8) (2 3 5 6) (2 3 5 7 8) (2 3 5 7) (2 3 5 8)
+        (2 3 5) (2 3 6 7 8) (2 3 6 7) (2 3 6 8) (2 3 6) (2 3 7 8) (2 3 7)
+        (2 3 8) (2 3) (2 4 5 6 7 8) (2 4 5 6 7) (2 4 5 6 8) (2 4 5 6)
+        (2 4 5 7 8) (2 4 5 7) (2 4 5 8) (2 4 5) (2 4 6 7 8) (2 4 6 7) (2 4 6 8)
+        (2 4 6) (2 4 7 8) (2 4 7) (2 4 8) (2 4) (2 5 6 7 8) (2 5 6 7) (2 5 6 8)
+        (2 5 6) (2 5 7 8) (2 5 7) (2 5 8) (2 5) (2 6 7 8) (2 6 7) (2 6 8) (2 6)
+        (2 7 8) (2 7) (2 8) (2) (3 4 5 6 7 8) (3 4 5 6 7) (3 4 5 6 8) (3 4 5 6)
+        (3 4 5 7 8) (3 4 5 7) (3 4 5 8) (3 4 5) (3 4 6 7 8) (3 4 6 7) (3 4 6 8)
+        (3 4 6) (3 4 7 8) (3 4 7) (3 4 8) (3 4) (3 5 6 7 8) (3 5 6 7) (3 5 6 8)
+        (3 5 6) (3 5 7 8) (3 5 7) (3 5 8) (3 5) (3 6 7 8) (3 6 7) (3 6 8) (3 6)
+        (3 7 8) (3 7) (3 8) (3) (4 5 6 7 8) (4 5 6 7) (4 5 6 8) (4 5 6)
+        (4 5 7 8) (4 5 7) (4 5 8) (4 5) (4 6 7 8) (4 6 7) (4 6 8) (4 6) (4 7 8)
+        (4 7) (4 8) (4) (5 6 7 8) (5 6 7) (5 6 8) (5 6) (5 7 8) (5 7) (5 8) (5)
+        (6 7 8) (6 7) (6 8) (6) (7 8) (7) (8) NIL)
+       (3 2 2 2 2 2 2 2 2 2 2 2 2 2 2 1 2 2 2 2 2 2 2 1 2 2 2 2 2 2 2 1 2 2 2 2
+        2 2 2 1 2 2 2 2 2 1 1 1 2 2 2 2 2 1 1 1 2 2 2 1 2 1 1 1 3 2 2 2 2 2 2 2
+        2 2 2 2 2 2 2 1 2 2 2 2 2 2 2 1 2 2 2 2 2 1 1 1 2 2 2 2 2 1 1 1 2 2 2 1
+        2 1 1 1 2 2 2 1 2 1 1 1 2 2 2 1 1 1 1 1 2 2 2 2 2 2 2 1 2 2 2 2 2 1 1 1
+        2 2 2 2 2 1 1 1 2 2 2 1 2 1 1 1 2 2 2 1 2 1 1 1 2 2 2 1 1 1 1 1 2 2 2 1
+        1 1 1 1 2 1 1 1 1 1 1 1 2 2 2 2 2 1 1 1 2 2 2 1 2 1 1 1 2 2 2 1 2 1 1 1
+        2 2 2 1 1 1 1 1 2 2 2 1 1 1 1 1 2 1 1 1 1 1 1 1 2 1 1 1 1 1 1 1 2 1 1 1
+        1 1 1 0))
+IN number-vehicles 
+K: 5
+#+end_example
+
+** 2-indexes polinomial vehicle flow
+#+BEGIN_SRC lisp :results output
+  (let* ((characteristics (get-description-elements 'cvrp-description))
+	 (sorted (topologic-sort characteristics 'basic-strategy))
+	 (cvrp-sorted (eval `(progn (defclass x ,sorted ()) (make-instance 'x))))
+	 (p-sol (eval `(progn ,(def-problem-solution-pair p1 basic-strategy cvrp-description) (make-instance 'p1)))))
+
+	  (Generate-solution-by-condition cvrp-sorted (make-instance 'basic-strategy) p-sol t)
+	   (format t "~%Solucion de bajo nivel ~%")
+           (from-high-to-low p-sol (make-instance ' cvrp-two-indexes-poli-vehicle-flow) t)
+    )
+
+
+
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+IN Main method
+IN visit-each-client-at-least-once
+clients: (1 2 3 4)
+routes: ((2 1) (3 4))
+IN  visit-client-at-most-once
+IN Main method
+IN visit-each-client-at-least-once
+clients: (1 2 3 4)
+routes: ((2 1) (3 4))
+IN dont-overload-vehicle
+demands: (0 91 26 44 9)
+values: (117 53)
+max value: 117
+capacity: 124
+IN  begin-end-in-depot
+routes with depot: ((0 2 1 0) (0 3 4 0))
+
+Solucion de bajo nivel 
+IN main method
+IN vehicles-charge-after-client-i
+u_i: #(0 117 26 44 53)
+IN number-vehicles 
+C: 124
+IN demand-each-client
+d_i: #(0 91 26 44 9)
+IN vehicle-goes-from-client-i-to-j 
+x_ij: #2A((0 0 1 1 0) (1 0 0 0 0) (0 1 0 0 0) (0 0 0 0 1) (1 0 0 0 0))
+IN number-vehicles 
+K: 2
+#+end_example

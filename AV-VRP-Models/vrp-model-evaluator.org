@@ -1,0 +1,186 @@
+#+TITLE: VRP model evaluator
+#+AUTHOR: Alejandra Monzon Penna
+#+AUTHOR: Gabriela Arguelles Terron
+
+* Load 
+
+#+BEGIN_SRC lisp :results none
+  (load "src/vrp-load.lisp")
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+Files form lmml: 
+Loading lmml/src/gagm.lisp ................................ OK
+Loading lmml/src/package.lisp ............................. OK
+Loading lmml/src/generic-functions.lisp ................... OK
+Loading lmml/src/utilities.lisp ........................... OK
+Loading lmml/src/macros.lisp .............................. OK
+Loading lmml/src/reader-macros.lisp ....................... OK
+Loading lmml/src/infix-to-prefix.lisp ..................... OK
+Loading lmml/src/ast-nodes.lisp ........................... OK
+Loading lmml/src/basic-language.lisp ...................... OK
+Loading lmml/src/code-generation-utils.lisp ............... OK
+Loading lmml/src/problem-examples.lisp .................... OK
+Loading lmml/src/writer-gmpl.lisp ......................... OK
+Loading lmml/src/lmml-case-sensitivity.lisp ............... OK
+
+Files from src
+Loading ./src/vrp-function-generator.lisp ................. OK
+
+Package VRP
+Loading ./src/vrp-package.lisp ............................ OK
+
+Files form utils: 
+Loading ./utils/vrp-random-number-generation.lisp ......... OK
+Loading ./utils/vrp-utils.lisp ............................ OK
+
+Files form src
+Loading ./src/vrp-utils.lisp .............................. OK
+Loading ./src/vrp-characteristics.lisp .................... OK
+Loading ./src/vrp-description-definition.lisp ............. OK
+Loading ./src/vrp-prerequisites.lisp ...................... OK
+Loading ./src/vrp-problem-solution-pair.lisp .............. OK
+Loading ./src/vrp-high-level-strategy.lisp ................ OK
+Loading ./src/vrp-generate-solution.lisp .................. OK
+Loading ./src/vrp-variables-parameters.lisp ............... OK
+Loading ./src/vrp-from-high-to-low.lisp ................... OK
+Loading ./src/vrp-invoke-function.lisp .................... OK
+
+Package AV-VRP
+Loading ./src/av-vrp-package.lisp ......................... OK
+#+end_example
+
+* Invoke function
+
+#+BEGIN_SRC lisp :results output :export code :tangle "src/vrp-model-evaluator.lisp"
+  (in-package :vrp)
+  (defmacro setf-values (set-param-var-list slots-list  lls-instance)
+    (format t "slot-list: ~a~%" slots-list)
+       (let* ((temporal-value (mapcar (lambda (x) (eval `(,x ,lls-instance))) slots-list))
+	      (setting (mapcar (lambda (x y) `(setf ,x ',y)) set-param-var-list temporal-value)))
+		    (format t "temp: ~a~%" setting)
+	 `(progn ,@setting)
+
+		    )
+    )
+
+
+  (defmacro invoke-function (function lls-slots lls stream)
+     (let ((args  (append (mapcar (lambda (x) `(,x ,lls)) lls-slots) `(,stream)) ))
+	`(,function ,@args)))
+
+
+  (defun pass-test  (function-list args-for-functions lls-instance test-number stream)
+
+    (let ((results (loop for function in function-list
+			 for r = (eval `(invoke-function ,function
+							      ,args-for-functions
+							      ,lls-instance ,stream))
+			   do (format stream "~a: ~a~%" function r)
+			    ;;  (format t "~a: ~a~%" function r)
+			   collect r )))
+
+      (if (eq test-number 1)
+	   (loop for i in results
+		always i)
+
+
+	  (not (loop for i in results
+		always i)
+	     ))))
+
+#+END_SRC
+
+* Evaluador del modelo
+
+El evaluador del modelo recibe un modelo matematico =Model= escrito en =LMML=, una lista de listas =symb-meaning= de la forma ((var-1 . sig-1) (var-2 . sig-2) ... (var-n . sig-n)) donde =var-1, var-2, ... var-n= son los simbolos de los conjuntos, variables y parametros usados en el modelo y =sig-1, sig-2,... sig-n= son los simbolos que representan los significados de cada parametro, variable y conjunto respectivamente. Del VRP recibe una descripcion del problema =problem-description= y ademas recibe la estrategia de alto nivel =high-level-strategy= .
+
+
+
+#+BEGIN_SRC lisp :results output :export code :tangle "src/vrp-model-evaluator.lisp"
+
+	 (defun sorted-replace (characteristics opposites current-subset)
+	     (loop for c in characteristics
+		   for o in opposites
+		   collecting (if (member c current-subset)
+				  c
+				  o)))
+
+
+
+	(defun generate-code-and-load-file (model symb-meaning)
+	   ;; set parameter *my-var-param-set-list* to problem's variables, parameters and sets
+	   (setf *my-var-param-set-list* (append (mapcar (lambda (x) (car x)) symb-meaning) '(stream)))
+
+	   ;; generate code (functions) in lisp to evaluate model constraints from LMML model 
+	   (with-open-file (stream "./src/functions-generated.lisp" :direction :output
+								   :if-exists :supersede
+								   :if-does-not-exist :create)
+	   (generate-code model lisp stream))
+
+	   ;; LOAD file with functons to evaluate
+	   (load "./src/functions-generated.lisp"))
+
+	(defun model-evaluator (model symb-meaning problem-description high-level-strategy output-file index)
+
+
+	   (generate-code-and-load-file model symb-meaning)
+
+	   (let* ((function-list (reverse (generate-code model lisp nil)))
+		  (ps-pair-symbol (symb "cvrp-problem-solution")) ;; create a symbol for problem-solution-class
+		  (sorted-characteristics (topologic-sort (get-description-elements problem-description)
+							  high-level-strategy));; sort characteristics by strategy
+		  (sorted-op-characteristics (mapcar (lambda (x) (car (opposite-characteristics x)))
+						    sorted-characteristics)) ;; take opposites
+		  (bipartition (power-set sorted-characteristics)) ;; Gnerate all subsets for bipartition
+		  (current-characteristics nil) 
+		  (args-for-functions (mapcar (lambda (x) (get-slot (cdr x))) symb-meaning))
+		  (lls-instance (eval `(progn (defclass model-strategy ,(mapcar (lambda (x) (cdr x)) symb-meaning) ())
+							(make-instance 'model-strategy)))))
+
+	    ;; create problem-solution pair class 
+	    (eval `(def-problem-solution-pair ,ps-pair-symbol ,high-level-strategy ,problem-description))
+
+	      (with-open-file (stream output-file :direction :output
+								:if-exists :supersede
+								:if-does-not-exist :create)
+	     (loop for current in bipartition
+		   for i from 1 to (length bipartition)
+		   do (setf current-characteristics (sorted-replace sorted-characteristics
+								    sorted-op-characteristics
+								    current))
+
+
+
+                          ;; (format t "{~a}~%" current-characteristics)
+			   (bformat stream "TEST: ~a" i)
+			   (let* ((vrp-problem (eval `(progn (defclass ,(symb "class-" i ) ,current-characteristics ())
+							(make-instance ',(symb "class-" i )))))
+				  (results (loop for j from 1 to index
+						       collect (let ((ps-pair-instance (make-instance ps-pair-symbol)))
+
+								  ;; generate high level solutions
+								      (format stream "~%Solution: ~a~%" j)
+                                                                    ;;  (format t "~%Solution: ~a~%" j)
+					(Generate-solution-by-condition vrp-problem (make-instance high-level-strategy) ps-pair-instance stream)
+					(from-high-to-low ps-pair-instance lls-instance stream)
+					(pass-test function-list args-for-functions lls-instance i stream)))))
+
+
+			    
+				  (if (loop for r in results
+				       always r)
+					 (format t "[TEST: ~a] PASSED~%" i)
+					 (format t "[TEST: ~a] FAILED~%" i)
+				      )
+			     )
+			)
+			)))
+
+
+
+
+#+END_SRC
+
+#+RESULTS:

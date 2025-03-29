@@ -1,0 +1,932 @@
+#+TITLE: VRP generate-solution
+#+AUTHOR: Alejandra Monzon Penna
+#+AUTHOR: Gabriela Arguelles Terron
+
+* Load 
+
+Para el generador de funciones es necesario cargar los archivos de lmml ya que en este DSL es que
+se recibe la definicion del modelo.
+
+#+BEGIN_SRC lisp :results output
+  (load "src/vrp-load.lisp")
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+Files form lmml: 
+Loading lmml/src/gagm.lisp ................................ OK
+Loading lmml/src/package.lisp ............................. OK
+Loading lmml/src/generic-functions.lisp ................... OK
+Loading lmml/src/utilities.lisp ........................... OK
+Loading lmml/src/macros.lisp .............................. OK
+Loading lmml/src/reader-macros.lisp ....................... OK
+Loading lmml/src/infix-to-prefix.lisp ..................... OK
+Loading lmml/src/ast-nodes.lisp ........................... OK
+Loading lmml/src/basic-language.lisp ...................... OK
+Loading lmml/src/code-generation-utils.lisp ............... OK
+Loading lmml/src/problem-examples.lisp .................... OK
+Loading lmml/src/writer-gmpl.lisp ......................... OK
+Loading lmml/src/lmml-case-sensitivity.lisp ............... OK
+
+Files from src
+Loading ./src/vrp-function-generator.lisp ................. OK
+
+Package VRP
+Loading ./src/vrp-package.lisp ............................ OK
+
+Files form utils: 
+Loading ./utils/vrp-random-number-generation.lisp ......... OK
+Loading ./utils/vrp-utils.lisp ............................ OK
+
+Files form src
+Loading ./src/vrp-utils.lisp .............................. OK
+Loading ./src/vrp-characteristics.lisp .................... OK
+Loading ./src/vrp-description-definition.lisp ............. OK
+Loading ./src/vrp-prerequisites.lisp ...................... OK
+Loading ./src/vrp-problem-solution-pair.lisp .............. OK
+Loading ./src/vrp-high-level-strategy.lisp ................ OK
+Loading ./src/vrp-generate-solution.lisp .................. OK
+Loading ./src/vrp-variables-parameters.lisp ............... OK
+Loading ./src/vrp-from-high-to-low.lisp ................... OK
+Loading ./src/vrp-model-evaluator.lisp .................... OK
+
+Package AV-VRP
+Loading ./src/av-vrp-package.lisp ......................... OK
+#+end_example
+
+
+
+* Modelo CVRP en LMML
+
+** Operaciones del LMML 
+
+    El lmml al ser un lenguaje para escribir modelos de optimizacion matematica, tiene una sintaxis 
+    con operaciones que permiten modelar matematicamente un VRP 
+
+    *** Operaciones basicas 
+      Las operaciones basicas  +,-,*,/,=,>,>=,<=,< se utilizan en notacion prefija    
+        
+        #+BEGIN_SRC lisp
+
+        #+END_SRC
+      
+    *** conjuntos
+
+    *** parametros 
+      Los parametros tienen la estructura =(parameter param-name)=, ademas pueden tener 
+      asociados el dominio al que pertenecen con el identificador =:domain= el dominio 
+      puede ser declarado explicitamente ={1,2,3, ...}= o ser conjuntos definidos con anterioridad 
+      ={V}=
+
+        #+BEGIN_SRC lisp
+
+          (parameter a)
+
+          (parameter c :domain {1 2 3})
+
+          (parameter d :domain {V})
+
+        #+END_SRC
+
+	#+RESULTS:
+	: [param-decl D (S_V)]
+
+    *** variables
+
+    *** sumatorias 
+    **** restriccion para-todo
+    *** restricciones
+*** funcion objetivo
+
+* CVRP
+
+  #+BEGIN_SRC lisp
+    (in-package :lmml)
+    (problem cvrp-model "CVRP Commodity Flow"
+	     (set V)
+	     (set I)
+
+	     (parameter c :domain {V V})
+	     (parameter d :domain {V})
+	     (parameter n)
+	     (parameter P)
+	     (parameter K)
+
+	     (variable-declaration x :domain {V V} :var-type binary-variable)
+	     (variable-declaration y :domain {V V})
+
+	     (minimize "obj" (sumf ((a in V))
+				   (sumf ((b in V))
+					 (* [x a b]  [c a b]))))
+
+	     (constraint "r1" (= (sumf ((b in V)) (- [y a b] [y b a])) (* 2 [d a]))
+						   :quantifiers ((for-all-quantifier a I)))
+
+	     (constraint "r2" (= (sumf ((b in I)) [y 0 b]) (sumf ((a in I)) [d i])))
+	     (constraint "r3" (= (sumf ((b in I)) [y b 0]) (- (* K P) (sumf ((a in I)) [d a]) )))
+	     (constraint "r4" (= (sumf ((b in I)) [y (+ n 1) b]) (* K P)))
+	     (constraint "r5" (= (+ [y a b] [y b a]) (* P [x a b]))
+						   :quantifiers ((for-all-quantifier a V)
+								 (for-all-quantifier b V)))
+
+	     (constraint "r6" (= (sumf ((b in V)) [x a b]) 1)
+						   :quantifiers ((for-all-quantifier a I)))
+	     (constraint "r7" (= (sumf ((b in V)) [x b a]) 1)
+						   :quantifiers ((for-all-quantifier a I))))
+  #+END_SRC
+
+  #+RESULTS:
+  : CVRP-MODEL
+
+  
+* Generacion de codigo (funciones)
+  
+  Para poder evaluar las soluciones de bajo nivel en las restricciones del modelo, es necesario convertir 
+  las restricciones en funciones que podamos evaluar, para esto es necesario generar codigo para llevar de 
+  LMML a las funciones. El lenguaje a generar =lisp-lang= tiene que especificar el comportamiento para cada 
+  nodo en el AST del LMML 
+
+** Crear el lenguaje 
+
+
+
+  #+BEGIN_SRC lisp :results none :export code :tangle "src/vrp-function-generator.lisp"
+
+    (in-package :lmml)
+    
+    (defclass lisp-lang (basic-language) ())
+
+    (defun lisp-lang () 
+      (make-instance 'lisp-lang 
+		      :union-symbol "union"
+		      :intersection-symbol "inter"
+		      :assignment-symbol "="
+		      :difference-symbol "diff"
+		      :cartesian-product-symbol "cross"))
+
+    (defparameter lisp (lisp-lang))
+  #+END_SRC
+
+*** Generar codigo de cada operacion 
+**** binary operations
+
+  Para las operaciones binarias se utiliza el macro =generate-code-for-bynary-operators= que esta ya 
+  hecho en lmml, este recibe el lenguaje en este caso =lisp-lang= la cadena donde sustituye la operacion 
+  binaria =(~a ~a ~a)=, el orden en que se escribe la operacion, como en este caso es de notacion prefija
+  es =op left rigth= y la lista con las operaciones binarias que queremos generen codigo en este formato, 
+  que en este caso es toda la lista de operaciones binarias basicas.
+
+  #+BEGIN_SRC lisp :results none :export code :tangle "src/vrp-function-generator.lisp"
+
+   
+    
+    (generate-code-for-binary-operators
+	 lisp-lang
+	 "(~a ~a ~a)"
+	 (op left right)
+	 *basic-language-binary-operators*)
+
+
+	(defmethod generate-code ((node symbol)
+			       (lang lisp-lang)
+			       stream)
+       (format stream "~a" (symbol-name node)))
+  #+END_SRC
+
+
+****** TEST 
+    #+begin_src lisp :results output
+      (let* ((lang (lisp-lang)))
+	(progn
+	  (bformat t "Testing operations in lisp-lang.")
+	  (generate-code (add-op 1 2) lang t) (terpri)
+	  (generate-code (- 2 3) lang t) (terpri)
+	  (generate-code (>= 3 4) lang t) (terpri)
+	  (generate-code (<= 4 5) lang t) (terpri)
+	  (generate-code (= 5 6) lang t) (terpri)
+	  (bformat t "Testing the addition of the extra parenthesis")
+	  (generate-code (+  (+ 'A 'B) (- 3 2)) lang t) (terpri) 
+	  (generate-code (<  (- 'A 'B) (+ 2 4)) lang t) (terpri)
+	  (generate-code (<= (- 1 3) (+ 2 4)) lang t) (terpri)
+	  (generate-code (>  (- 1 3) (+ 2 4)) lang t) (terpri)
+	  (generate-code (>= (- 1 3) (+ 2 4)) lang t) (terpri)
+	  (generate-code (=  (- 1 3) (+ 2 4)) lang t) (terpri)))
+
+     
+    #+end_src
+
+    #+RESULTS:
+    #+begin_example
+    ==================================
+     Testing operations in lisp-lang.
+    ==================================
+
+    (+ 1 2)
+    (- 2 3)
+    (>= 3 4)
+    (<= 4 5)
+    (= 5 6)
+    ===============================================
+     Testing the addition of the extra parenthesis
+    ===============================================
+
+    (+ (+ A B) (- 3 2))
+    (< (- A B) (+ 2 4))
+    (<= (- 1 3) (+ 2 4))
+    (> (- 1 3) (+ 2 4))
+    (>= (- 1 3) (+ 2 4))
+    (= (- 1 3) (+ 2 4))
+    #+end_example
+
+**** is-a-reference
+
+#+BEGIN_SRC lisp +n -r :results none :exports none :tangle "src/vrp-function-generator.lisp" 
+      (gcode is-a-reference lisp-lang ("~a") (name))
+      #+END_SRC
+
+***** TEST
+
+     #+begin_src lisp :results output
+     (let* ((lang (lisp-lang)))
+       (progn
+         (bformat t "Testing is-a-reference in gmpl-language.")
+         (generate-code (var-ref "A") lang t) (terpri)))
+     #+end_src
+
+     #+RESULTS:
+     : ==========================================
+     :  Testing is-a-reference in gmpl-language.
+     : ==========================================
+     : 
+     : A
+
+**** index-at
+
+ #+BEGIN_SRC lisp +n -r :results none :exports none :tangle "src/vrp-function-generator.lisp" 
+      (defmethod generate-code((node index-at)
+                               (lang lisp-lang)
+                               (stream t))
+
+        (let* ((indexes-code (mapcar (lambda (x) (generate-code x lang nil))
+                                     (indexes node))))
+          (format stream "(aref ~a ~{~a ~})"
+                  (gcodenil var-name)
+                  indexes-code)))
+      #+END_SRC
+
+***** TEST
+
+       #+begin_src lisp :results output
+     (let* ((lang (lisp-lang)))
+       (progn
+         (bformat t "Testing index-at in lisp-lang.")
+         (generate-code (index-at "x" (- 1 4) 2 3) lang t) (terpri)))
+     #+end_src
+
+     #+RESULTS:
+     : ================================
+     :  Testing index-at in lisp-lang.
+     : ================================
+     : 
+     : (aref x (- 1 4) 2 3 )
+
+**** var-in-set
+
+#+BEGIN_SRC lisp +n -r :results none :exports none :tangle "src/vrp-function-generator.lisp" 
+      (gcode var-in-set lisp-lang ("~a in ~a") (var-name set-name))
+    #+END_SRC
+
+***** TEST
+#+begin_src lisp :results output
+      (let* ((lang (lisp-lang))
+             (node1 (var-in-set 'i 'J))
+             (node2 (var-in-set "i" "J"))
+             (i (var-ref "i"))
+             (s-decl (set-declaration-node "S"))
+             (S (set-ref "S" s-decl))
+             (node3 (var-in-set i S))
+             )
+        (progn
+          (bformat t "Testing sum-node in gmpl-language.")
+          (generate-code node1 lang t)  (terpri)
+          (generate-code node2 lang t)  (terpri)
+          (generate-code node3 lang t)  (terpri)
+          ))
+      #+end_src
+
+      #+RESULTS:
+      : ====================================
+      :  Testing sum-node in gmpl-language.
+      : ====================================
+      : 
+      : I in J
+      : i in J
+      : i in S
+
+**** sum-node
+
+      #+BEGIN_SRC lisp +n -r :results none :exports none :tangle "src/vrp-function-generator.lisp" 
+    (defmethod generate-code ((node sum-node)
+				(lang lisp-lang)
+					  stream)
+	(let* ((length (loop for i in (sum-bounds node) sum (if (or (subtypep (type-of i) 'var-in-set)
+								    (subtypep (type-of i) 'var-from-to))
+										1 0)))
+	       (end-line (make-string length :initial-element #\)))
+	       (loop-when (mapcar (lambda (x) (if (or (subtypep (type-of x) 'var-in-set)
+						      (subtypep (type-of x) 'var-from-to))
+							"(loop for" "when" ))
+						(sum-bounds node))))
+	    
+	    
+		(format stream "~:{ ~a ~a ~%~t~} sum ~a~a~% "
+			 (mapcar (lambda (y x) (list y (gcodenil-exp x)))
+					loop-when (sum-bounds node))
+					(gcodenil elements) end-line)))
+
+      #+END_SRC
+
+***** TEST
+
+       #+begin_src lisp :results output
+	 (let* ((lang (lisp-lang))
+		 (s-one (set-ref 's-one))
+		 (node1 (sumf ((i in s-one)) i))
+		 (node2 (sumf ((i in s-one)
+			       (j in s-one))
+			      (+ i j)))
+		 (node3 (sumf ((i in s-one)
+			       (< i 5))
+			      (+ i 2)))
+		 )
+	    (progn
+	      (bformat t "Testing sum-node in lisp-lang.")
+	      (generate-code node1 lang t) (terpri)
+	      (generate-code node2 lang t)  (terpri)
+	      (generate-code node3 lang t)  (terpri)
+
+	      ))
+      #+end_src
+
+      #+RESULTS:
+      #+begin_example
+      ================================
+       Testing sum-node in lisp-lang.
+      ================================
+
+       (loop for I in S-ONE 
+	sum I)
+
+       (loop for I in S-ONE 
+	(loop for J in S-ONE 
+	sum (+ I J)))
+
+       (loop for I in S-ONE 
+	when (< I 5) 
+	sum (+ I 2))
+
+      #+end_example
+  
+**** for-all-quantifier
+
+    #+BEGIN_SRC lisp :results none :export code :tangle "src/vrp-function-generator.lisp"
+      (gcode for-all-quantifier lisp-lang ("loop for ~a in ~a~%~t when (not ~a") (var-name set-name (if (pred node) (format nil "(or (not ~a) " (gcodenil pred)) "" ) ))
+    #+END_SRC
+
+***** TEST
+
+   #+begin_src lisp :results output
+     (let* ((lang (lisp-lang)))
+       (progn
+         (bformat t "Testing for-all in gmpl-language.")
+         (generate-code (for-all-quantifier  "i" "I" nil) lang t) (terpri)
+         (generate-code (for-all-quantifier  "i" "I" (< "i" 5)) lang t) (terpri)))
+     #+end_src
+
+     #+RESULTS:
+     : ===================================
+     :  Testing for-all in gmpl-language.
+     : ===================================
+     : 
+     : loop for i in I
+     :   when (not 
+     : loop for i in I
+     :   when (not (or (not (< i 5)) 
+
+**** constraint-node
+
+ #+BEGIN_SRC lisp :results none :export code :tangle "src/vrp-function-generator.lisp"
+
+		  (defparameter *my-var-param-set-list* '(x y K C M P))
+
+		  (defmethod generate-code ((node constraint-node)
+					    (lang lisp-lang)
+					    stream)
+		    (let ((main-code-string (generate-code (func node) lang nil)))
+		    (if (quantifiers node)
+			(format stream "(defun ~a ~a~%~t~a)"
+				(generate-code (id node) lang nil)
+				,*my-var-param-set-list*
+				(build-for-all-string (quantifiers node) main-code-string lang))
+
+			(format stream "(defun ~a ~a~%~t~a)"
+				(generate-code (id node) lang nil)
+				,*my-var-param-set-list*
+				 main-code-string))))
+
+		  (defun build-for-all-string (for-all-list main-code-string lang)
+		     (if (eq (length for-all-list) 1) 
+			(format nil "(~a ~a~a)~% ~a)" (generate-code (car for-all-list) lang nil)
+						  main-code-string
+						 (if (pred (car for-all-list)) ")"  "" )
+						 (build-return-finally (generate-code (var-name (car for-all-list)) lang nil) ))
+			(format nil "(~a~a~a)~% ~a)"
+				(generate-code (car for-all-list) lang nil)
+				(build-for-all-string (cdr for-all-list) main-code-string lang)
+				(if (pred (car for-all-list)) ")"  "" )
+				(build-return-finally (generate-code (var-name (car for-all-list)) lang nil)))))
+
+		  (defun build-return-finally (iter-name)
+		    (format nil "do (format stream \"~t error detected in ~a: ~a\" ~a)~%(return nil)~%finally (return t)" iter-name "~a~%" iter-name))
+
+    #+END_SRC
+
+
+***** TEST
+
+      #+begin_src lisp :results output
+	      (let* ((lang (lisp-lang)))
+		(progn
+		  (bformat t "Testing constraint-node in lisp-lang.")
+		  (generate-code (constraint-node 1 (<= "x" 5)) lang t)
+		  (terpri)
+		  (generate-code (constraint-node "r" (<= (index-at "x" 1 "j") 5)
+		                                  :quantifiers
+		                                  (list (for-all-quantifier "j" "J" nil)))
+		                lang t)
+		  (terpri)
+		  (generate-code (constraint-node "r" (<= (index-at "x" 1 "j" "k") 5)
+						  :quantifiers
+						  (list (for-all-quantifier "j" "J" nil)
+							(for-all-quantifier "k" "K" nil)
+							(for-all-quantifier "l" "L" nil)))
+				 lang t)
+		  (terpri)
+		  ))
+      #+end_src
+
+      #+RESULTS:
+      #+begin_example
+      =======================================
+       Testing constraint-node in lisp-lang.
+      =======================================
+
+      (defun 1 (X Y K C M P)
+       (<= x 5))
+      (defun r (X Y K C M P)
+       (loop for j in J
+	when (not  (<= (aref x 1 j ) 5))
+       do (format t "error detected in j: ~a " j)
+      (return nil)
+      finally (return t)))
+      (defun r (X Y K C M P)
+       (loop for j in J
+	when (not (loop for k in K
+	when (not (loop for l in L
+	when (not  (<= (aref x 1 j k ) 5))
+       do (format t "error detected in l: ~a " l)
+      (return nil)
+      finally (return t)))
+       do (format t "error detected in k: ~a " k)
+      (return nil)
+      finally (return t)))
+       do (format t "error detected in j: ~a " j)
+      (return nil)
+      finally (return t)))
+      #+end_example
+
+**** range-node
+
+       #+BEGIN_SRC lisp +n -r :results none :exports none :tangle "src/vrp-function-generator.lisp" 
+      (gcode range-node lisp-lang
+             ("from ~a to ~a~a")
+             (min-value
+              max-value
+              (if (and (numberp (increment node))
+                       (/= (increment node) 1))
+                  (format nil " by ~a"
+                          (gcodenil increment))
+                  "")))
+      #+END_SRC
+
+***** TEST
+
+    #+begin_src lisp :results output
+     (let* ((lang (lisp-lang))
+            (node1 (range 1 5))
+            (node2 (range 1 5 :increment 2)))
+
+       (bformat t "Testing code-generation for range-node")
+       (generate-code node1 lang t) (terpri)
+       (generate-code node2 lang t) (terpri))
+     #+end_src
+
+     #+RESULTS:
+     : ========================================
+     :  Testing code-generation for range-node
+     : ========================================
+     : 
+     : from 1 to 5
+     : from 1 to 5 by 2
+
+**** objective-function-node
+
+    #+BEGIN_SRC lisp :results none :export code :tangle "src/vrp-function-generator.lisp"
+      (gcode objective-function-node lisp-lang ("") nil)
+    #+END_SRC
+
+***** TEST
+
+   #+begin_src lisp :results output
+     (let* ((lang (lisp-lang)))
+       (progn
+         (bformat t "Testing objective-function in gmpl-language.")
+         (let* ((node1 (objective-function-node "goal" (+ "x" 5) :id "obj1"))
+                (node2 (minimize "obj2" (+ (* "x" 5) (* "y" 6))))
+                (node3 (maximize "obj3" (+ (* "x" 5) (* "y" 6)))))
+           (generate-code node1 lang t) (terpri)
+           (generate-code node2 lang t) (terpri)
+           (generate-code node3 lang t) (terpri))))
+     #+end_src
+
+     #+RESULTS:
+     : ==============================================
+     :  Testing objective-function in gmpl-language.
+     : ==============================================
+     : 
+     : 
+     : 
+     : 
+  
+**** paramter-declaration-node
+
+    #+BEGIN_SRC lisp :results none :export code :tangle "src/vrp-function-generator.lisp"
+      (gcode parameter-declaration-node lisp-lang ("(defparameter ~a nil)") (name))
+    #+END_SRC
+
+***** TEST
+
+     #+begin_src lisp :results output
+      (let* ((lang (lisp-lang))
+             (node1 (parameter-declaration-node 'p))
+             (node2 (parameter-declaration-node 'P :domain '(I)))
+             (node3 (parameter-declaration-node 'P :domain '(I J)))
+             (node4 (parameter-declaration-node 'P :value 5))
+             (node5 (parameter-declaration-node 'P :value 5
+                                                :doc "A documentation")))
+        (bformat t "Testing parameter-declaration node")
+        (generate-code node1 lang t) (terpri) 
+        (generate-code node2 lang t) (terpri)
+        (generate-code node3 lang t) (terpri)
+        (generate-code node4 lang t) (terpri)
+        (generate-code node5 lang t) (terpri))
+      #+end_src
+
+      #+RESULTS:
+      : ====================================
+      :  Testing parameter-declaration node
+      : ====================================
+      : 
+      : 
+      : 
+      : 
+      : 
+      : 
+
+**** set-declaration-node
+
+    #+BEGIN_SRC lisp :results none :export code :tangle "src/vrp-function-generator.lisp"
+      (gcode set-declaration-node lisp-lang ("(defparameter ~a nil)") (name))
+    #+END_SRC
+
+
+***** TEST
+     #+begin_src lisp :results output
+     (let* ((lang (lisp-lang))
+            (node1 (set-declaration-node 's))
+            (node2 (set-declaration-node 'S1 :dimension 2))
+            (node3 (set-declaration-node 'S-max :value '(1 2 3)))
+            (node4 (set-declaration-node 'xvM :value '(1 2 3)
+                                         :doc "A set documentation"))
+            (node5 (set-declaration-node 'T12 :dimension (+ 1 1)))
+            (node6 (set-declaration-node 'TS_45p :value (list 1 (+ 1 1) 3)))
+            (node7 (set-declaration-node 'S12_O-12 :value (list (range 1 3)))))
+
+       (bformat t "Testing set-declaration code generation")
+       (generate-code node1 lang t) (terpri)
+       (generate-code node2 lang t) (terpri)
+       (generate-code node3 lang t) (terpri)
+       (generate-code node4 lang t) (terpri)
+       (generate-code node5 lang t) (terpri)
+       (generate-code node6 lang t) (terpri)
+       (generate-code node7 lang t) (terpri))
+     #+end_src
+
+     #+RESULTS:
+     #+begin_example
+     =========================================
+      Testing set-declaration code generation
+     =========================================
+
+
+
+
+
+
+
+
+     #+end_example
+     
+**** variable-declaration-node
+    
+    #+BEGIN_SRC lisp :results none :export code :tangle "src/vrp-function-generator.lisp"
+
+      (defmethod generate-code ((node variable-declaration-node)
+				(lang lisp-lang)
+					 stream)
+	(format stream "(defparameter ~a nil)~%" (name node))
+	(if (lower-bound node)
+	       (format stream "~a~%" (build-st-for-bound
+			 (format nil "~a-lower-bound" (name node)) "<=" node 'lower-bound lang)))
+
+	(if (upper-bound node)
+		(format stream "~a~%"  (build-st-for-bound (format nil "~a-upper-bound" (name node)) ">=" node 'upper-bound lang ))))      
+    #+END_SRC
+
+
+      #+BEGIN_SRC lisp :results none :export code :tangle "src/vrp-function-generator.lisp"
+		(defun build-st-for-bound (function-name operation node bound lang)
+		      (if (domain node)
+
+			 (let* ((domain-indexes  (loop for i from 0 to (1- (length (domain node)))
+							 collect (symb "i" i)))
+				(aref-text (format nil "(aref ~a ~{~a ~})" (name node) domain-indexes))
+				(condition-text (format nil "(~a ~a ~a)" operation (eval`(,bound ,node))  aref-text))
+				(quantifiers-list (loop for i from 0 to (1- (length (domain node)))
+							 collect (make-instance 'for-all-quantifier
+								 :var-name (symb "i" i)
+								 :pred nil
+								 :set-name (nth i (domain node))))))
+			  (format nil "(defun ~a ~a~%~t~a)" function-name
+				   ,*my-var-param-set-list*
+				   (build-for-all-string quantifiers-list condition-text lang)) )
+
+			(format nil "(defun ~a ~a~%~t(~a ~a ~a))" function-name
+								 ,*my-var-param-set-list*
+								 operation (eval`(,bound ,node)) (name node))))
+    #+END_SRC
+
+
+
+***** TEST
+
+     #+begin_src lisp :results output
+     (let* ((lang (lisp-lang)))
+       (progn
+         (bformat t "Testing variable-declaration-node in gmpl-language.")
+         (let* ((node1 (variable-declaration-node 'x))
+                (node2 (variable-declaration-node 'Y :domain '(I)))
+                (node3 (variable-declaration-node 'Z12 :domain '(I I)))
+                (node4 (variable-declaration-node 'TEMP :domain '(I I)
+                                                  :var-type integer-variable))
+                (node5 (variable-declaration-node 'x123 :domain '(I I)
+                                                  :var-type binary-variable))
+                (node6 (variable-declaration-node 'x-f-y :domain '(I I)
+                                                  :var-type continuous-variable))
+                (node7 (variable-declaration-node 'x-1234 :domain '(I I)
+                                                  :var-type continuous-variable
+                                                  :lower-bound 1))
+                (node8 (variable-declaration-node 'x_ij :domain '(I I)
+                                                  :var-type continuous-variable
+                                                  :upper-bound 10))
+                (node9 (variable-declaration-node 'Q_mn :domain '(I I)
+                                                  :var-type continuous-variable
+                                                  :lower-bound 5
+                                                  :upper-bound 10)))
+           (generate-code node1 lang t) (terpri)
+           (generate-code node2 lang t) (terpri)
+           (generate-code node3 lang t) (terpri)
+           (generate-code node4 lang t) (terpri)
+           (generate-code node5 lang t) (terpri)
+           (generate-code node6 lang t) (terpri)
+           (generate-code node7 lang t) (terpri)
+           (generate-code node8 lang t) (terpri)
+           (generate-code node9 lang t) (terpri))))
+     #+end_src
+
+     #+RESULTS:
+     #+begin_example
+     =====================================================
+      Testing variable-declaration-node in gmpl-language.
+     =====================================================
+
+     (defparameter X nil)
+     (defun X-lower-bound (X Y K C M P)
+      (<= 0 X))
+
+     (defparameter Y nil)
+     (defun Y-lower-bound (X Y K C M P)
+      (loop for I0 in I
+       when (not  (<= 0 (aref Y I0 )))
+      return nil
+     finally (return t)))
+
+     (defparameter Z12 nil)
+     (defun Z12-lower-bound (X Y K C M P)
+      (loop for I0 in I
+       when (not (loop for I1 in I
+       when (not  (<= 0 (aref Z12 I0 I1 )))
+      return nil
+     finally (return t)))
+      return nil
+     finally (return t)))
+
+     (defparameter TEMP nil)
+     (defun TEMP-lower-bound (X Y K C M P)
+      (loop for I0 in I
+       when (not (loop for I1 in I
+       when (not  (<= 0 (aref TEMP I0 I1 )))
+      return nil
+     finally (return t)))
+      return nil
+     finally (return t)))
+
+     (defparameter X123 nil)
+     (defun X123-lower-bound (X Y K C M P)
+      (loop for I0 in I
+       when (not (loop for I1 in I
+       when (not  (<= 0 (aref X123 I0 I1 )))
+      return nil
+     finally (return t)))
+      return nil
+     finally (return t)))
+
+     (defparameter X-F-Y nil)
+     (defun X-F-Y-lower-bound (X Y K C M P)
+      (loop for I0 in I
+       when (not (loop for I1 in I
+       when (not  (<= 0 (aref X-F-Y I0 I1 )))
+      return nil
+     finally (return t)))
+      return nil
+     finally (return t)))
+
+     (defparameter X-1234 nil)
+     (defun X-1234-lower-bound (X Y K C M P)
+      (loop for I0 in I
+       when (not (loop for I1 in I
+       when (not  (<= 1 (aref X-1234 I0 I1 )))
+      return nil
+     finally (return t)))
+      return nil
+     finally (return t)))
+
+     (defparameter X_IJ nil)
+     (defun X_IJ-lower-bound (X Y K C M P)
+      (loop for I0 in I
+       when (not (loop for I1 in I
+       when (not  (<= 0 (aref X_IJ I0 I1 )))
+      return nil
+     finally (return t)))
+      return nil
+     finally (return t)))
+
+     (defun X_IJ-upper-bound (X Y K C M P)
+       (loop for I0 in I
+            when (not (loop for I1 in I
+                          when (not  (>= 10 (aref X_IJ I0 I1 )))
+      return nil
+     finally (return t)))
+      return nil
+     finally (return t)))
+
+     (defparameter Q_MN nil)
+     (defun Q_MN-lower-bound (X Y K C M P)
+      (loop for I0 in I
+       when (not (loop for I1 in I
+       when (not  (<= 5 (aref Q_MN I0 I1 )))
+      return nil
+     finally (return t)))
+      return nil
+     finally (return t)))
+     (defun Q_MN-upper-bound (X Y K C M P)
+      (loop for I0 in I
+       when (not (loop for I1 in I
+       when (not  (>= 10 (aref Q_MN I0 I1 )))
+      return nil
+     finally (return t)))
+      return nil
+     finally (return t)))
+
+     #+end_example
+
+**** problem-definition-node
+
+
+   #+BEGIN_SRC lisp :results none :export code :tangle "src/vrp-function-generator.lisp"
+
+     (defmethod generate-code ((node problem-definition-node)
+				 (lang lisp-lang)
+				stream)
+       (let* ((func-list '()))
+
+	   (loop for inst in (elements (instr node))
+	     do (cond ((subtypep (type-of inst) 'variable-declaration-node)
+		  (progn
+		    (if (lower-bound inst)
+		      (push (symb (format nil "~a-lower-bound" (name inst))) func-list))
+		    (if (upper-bound inst)
+		      (push (symb (format nil "~a-upper-bound" (name inst))) func-list))))
+
+		   ((subtypep (type-of inst) 'constraint-node)
+		       (push (symb (id inst)) func-list)))
+	      )
+
+	     (format stream "(in-package :vrp)~%")
+	     (format stream "~a" (gcodenil-exp (instr node)))
+	     func-list
+	   ))
+
+
+
+
+   #+END_SRC
+   
+       #+begin_src lisp :results output
+       (generate-code cvrp-model (lisp-lang) t)
+  #+end_src
+
+  #+RESULTS:
+  #+begin_example
+
+
+  (defun X-lower-bound (X Y K C M P)
+   (loop for I0 in V
+    (loop for I1 in V
+      always (<= 0 (aref X I0 I1 )))
+
+
+  (defun Y-lower-bound (X Y K C M P)
+   (loop for I0 in V
+    (loop for I1 in V
+      always (<= 0 (aref Y I0 I1 )))
+
+
+
+
+  (defun r1 (X Y K C M P)
+   (loop for A in I
+     always (=  (loop for B in V 
+    sum (- (aref Y A B ) (aref Y B A )))
+    (* 2 (aref D A ))) ))
+
+  (defun r2 (X Y K C M P)
+   (=  (loop for B in I 
+    sum (aref Y 0 B ))
+     (loop for A in I 
+    sum (aref D I ))
+   ))
+
+  (defun r3 (X Y K C M P)
+   (=  (loop for B in I 
+    sum (aref Y B 0 ))
+    (- (* K P) M)))
+
+  (defun r4 (X Y K C M P)
+   (=  (loop for B in I 
+    sum (aref Y (+ N 1) B ))
+    (* K P)))
+
+  (defun r5 (X Y K C M P)
+   (loop for B in V
+    (loop for A in V
+     always (= (+ (aref Y A B ) (aref Y B A )) (* P (aref X A B ))) )))
+
+  (defun r6 (X Y K C M P)
+   (loop for A in I
+     always (=  (loop for B in V 
+    sum (aref X A B ))
+    1) ))
+
+  (defun r7 (X Y K C M P)
+   (loop for A in I
+     always (=  (loop for B in V 
+    sum (aref X B A ))
+    1) ))
+  #+end_example
+
+
+
+
+ 
+  

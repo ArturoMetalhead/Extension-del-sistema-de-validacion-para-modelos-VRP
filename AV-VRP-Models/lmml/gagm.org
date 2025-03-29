@@ -1,0 +1,1706 @@
+* Description
+  In this file I'm going to add the GAGM suite to automatically create multilanguage code generators.
+
+  In this new version, all the src blocks will be tangled to a single file.  The file will be called =gagm.lisp=.
+
+* package definition
+  #+begin_src lisp :results none :export code :tangle src/gagm.lisp
+    (defpackage :gagm
+      (:use :cl :cl-user)
+      (:export defabsnode
+               defnode
+               macro
+               generate-code
+               lang
+               node
+               gcode
+               gcodenil
+               gcodenil-exp
+               gif
+               make-ctr))
+   #+end_src
+
+* mga-utils
+** description
+   In this section we add functions that will be used by the rest of the system.
+** let's add the package to the file
+  #+begin_src lisp :results none :export code :tangle src/gagm.lisp
+   (in-package :gagm)
+   #+end_src
+   
+** ordered-set-difference
+*** description
+    This function is a replacement for the built-in set-difference, because this one (the built-in) does not preserve the order of the sets, and this breaks some things in magm.
+*** code
+     #+begin_src lisp :results none :export code :tangle src/gagm.lisp
+    (defun ordered-set-difference (list1 list2)
+   "Returns a list with the elements of list1 that do not appear in list2,
+ but it preserves the order of the elements in list1."
+   (loop for elt in list1
+         unless (member elt list2) collect elt))
+    #+end_src
+*** tests
+     #+begin_src lisp :results output :export code :tangle tests/gagm-tests.lisp
+     (let* ((s1 '(1 2 3 4))
+            (s2 '(2 5 7 1)))
+       (format t "set-difference: ~a and ~a:~%   ~a~%"
+               s1 s2 (ordered-set-difference s1 s2)))
+    #+end_src
+** ordered-union
+*** description
+    This function is a replacement for the built-in set-union, because this one (the built-in) does not preserve the order of the sets, and this breaks some things in magm.
+*** code
+    #+begin_src lisp :results none :tangle :export code :tangle src/gagm.lisp
+    (defun ordered-union (list1 list2)
+  "Returns a list with the elements that are either in list1 or in list2,
+but it preserves the order of the elements both lists."
+  ;; first we add all the elements in list1
+  (let* ((union nil))
+    (loop for elt in (append list1 list2)
+          do (pushnew elt union))
+    (reverse union)))
+    #+end_src
+*** tests
+     #+begin_src lisp :results output :export code :tangle tests/gagm-tests.lisp
+     (let* ((s1 '(1 2 3 4))
+            (s2 '(2 7 5 1)))
+       (format t "union: ~a and ~a:~%   ~a~%"
+               s1 s2 (ordered-union s1 s2)))
+    #+end_src
+** make-keyword
+*** description
+    This function creates a new keyword.
+*** code
+    #+begin_src lisp :results none :tangle :export code :tangle src/gagm.lisp
+    (defun make-keyword (string symbol)
+      (read-from-string (format nil string symbol)))
+    #+end_src
+*** tests
+     #+begin_src lisp :results output :export code :tangle tests/gagm-tests.lisp
+     (format t "make-keyword: ~a~%" (make-keyword ":~a" 'hello))
+    #+end_src
+    
+** flatten-list
+*** description
+    The classical problem of flattening a list
+*** code
+    #+begin_src lisp :results none :tangle :export code :tangle src/gagm.lisp
+    (defun flatten-list (x)
+      "Flattens a structure."
+      (labels ((rec (x acc)
+                 (cond ((null x) acc)
+                       ((atom x) (cons x acc))
+                       (t (rec (car x) (rec (cdr x) acc))))))
+        (rec x nil)))
+    #+end_src
+*** tests
+     #+begin_src lisp :results output :export code :tangle tests/gagm-tests.lisp
+     (let* ((list '(1 (2 3) (4 (5 6 (7 8 9)) 10))))
+       (format t "flattening list ~a:~%~a~%"
+               list (flatten-list list)))
+    #+end_src
+    
+** second-elements
+*** description
+    This function returns the "every second element" from a list.  For example, when given (1 2 3 4 5 6) returns (2 4 6).
+*** code
+    #+begin_src lisp :results none :tangle :export code :tangle src/gagm.lisp
+    (defun second-elements (list)
+      (let* ((count 0)
+             (result nil))
+        (loop for element in list
+              doing(if (eq count 1)
+                       (prog2
+                           (setf count 0)
+                           (setf result (ordered-union
+                                         result
+                                         (list element))))
+                       (setf count 1)))
+        result))
+    #+end_src
+*** tests
+     #+begin_src lisp :results output :export code :tangle tests/gagm-tests.lisp
+     (let* ((list '(1 2 3 4 5 6 7 8)))
+       (format t "second-elements from list ~a:~%~a~%"
+               list (second-elements list)))
+    #+end_src
+    
+* macro core
+** description
+   In this section we add all the functions used in the macros inside gagm. The functions will be tangled to macro-core.lisp.
+** add the package
+  #+begin_src lisp :results none :export code :tangle src/gagm.lisp
+   (in-package :gagm)
+   #+end_src
+   
+** dictionary related work
+*** description
+    In this section there are the functions related to the management of the properties in the classes.
+*** fill-pdict                                                :missing:tests:
+**** description
+     Adds a property to a dictionary.
+     pdict: is a list with all the properties in the declared classes.
+       Every element in pdict is a list with
+        -  con el nombre de la clase declarada como primer elemento.
+        - Una lista con los padres de la clase (herencia)
+        - como segundo elemento y el resto de la lista
+        -  son las nuevas propiedades declaradas en su definicion.
+    
+**** code
+      #+begin_src lisp :results none :export code :tangle src/gagm.lisp
+     (defun fill-pdict (property-name dict)
+       (let ((aux (cdr dict)))
+         (prog2
+             (setf dict (append (first dict) property-name))
+             (setf dict (append (list dict) aux)))))
+     #+end_src
+**** TODO tests
+      #+begin_src lisp :results output :export code :tangle tests/gagm-tests.lisp
+     
+     #+end_src
+*** remove-class-data                                         :missing:tests:
+**** description
+     This function removes the data associated to a class.
+**** code
+     #+begin_src lisp :results none :export code :tangle src/gagm.lisp
+     (defun remove-class-data(class-name dict)
+       (loop for  element in dict
+             doing (if (eq (car element) class-name)
+                       (setf dict (remove element dict))))
+       dict)
+     #+end_src
+**** TODO tests
+     #+begin_src lisp :results output :export code :tangle tests/gagm-tests.lisp
+    
+     #+end_src
+*** insert-class-data
+**** description
+     This function inserts the data associated to a class.
+**** code
+     #+begin_src lisp :results none :export code :tangle src/gagm.lisp
+     (defun insert-class-data (dict class-name inherit &rest slots)
+       (if (not (eq dict nil))
+           (setf dict (remove-class-data class-name dict)))
+       (push (list class-name inherit) dict)
+       (loop for property-name in slots
+             doing (setf dict (fill-pdict property-name dict)))
+       dict)
+     #+end_src
+**** tests
+***** basic test
+      #+begin_src lisp :results output :export code :tangle tests/gagm-tests.lisp
+      (let* ((dict nil))
+        (setf dict (insert-class-data dict 'person () '(name :accessor name) '(age)))
+        (format t "dict after person: ~a~%" dict))
+      #+end_src
+
+***** testing remove data
+      #+begin_src lisp :results output :export code :tangle tests/gagm-tests.lisp
+      (let* ((dict nil))
+        (setf dict (insert-class-data dict 'person () '(name :accessor name) '(age)))
+        (format t "dict after person: ~a~%" dict)
+        (setf dict (remove-class-data 'person dict))
+        (format t "dict after remove data: ~a~%" dict))
+      #+end_src
+      
+*** get-data-from-dictionary
+**** description
+     Returns the data of a given definition
+**** code
+     #+begin_src lisp :results none :export code :tangle src/gagm.lisp
+     (defun get-data-from-dictionary (class-name dictionary)
+       (assoc class-name dictionary))
+     #+end_src
+**** test
+     #+begin_src lisp :results output :export code :tangle tests/gagm-tests.lisp
+     (let* ((dict nil)
+            (class-data))
+       (setf dict (insert-class-data dict 'person () '(name :accessor name) '(age)))
+       (format t "dict after person: ~a~%" dict)
+       (setf class-data (get-data-from-dictionary 'person dict))
+       (format t "class-data after remove data: ~a~%" class-data))
+     #+end_src
+** class-data manipulation
+*** description
+    In this section, we'll add all the functions related to accessing the classes elements in the dictionary
+*** get-slots-from-class
+**** description
+     Returns the slots in a given class.
+**** code
+     #+begin_src lisp :results none :export code :tangle src/gagm.lisp
+     (defun get-slots-from-class (class-name dictionary)
+       (let* ((result (cddr (get-data-from-dictionary
+                             class-name dictionary))))
+         (mapcan #'(lambda (x) (if (eq x nil) nil (list x))) result)))
+     #+end_src
+**** test
+***** simple test
+      #+begin_src lisp :results output :export code :tangle tests/gagm-tests.lisp
+      (let* ((dict nil)
+             (class-slots))
+        (setf dict (insert-class-data dict 'person () '(name :accessor name) '(age)))
+        (format t "dict after person: ~a~%" dict)
+        (setf class-slots (get-slots-from-class 'person dict))
+        (format t "slots for class person: ~a~%" class-slots))
+      #+end_src
+***** test with two classes
+      #+begin_src lisp :results output :export code :tangle tests/gagm-tests.lisp
+      (let* ((dict nil)
+             (class-slots))
+        (setf dict (insert-class-data dict 'person ()
+                                      '(name :accessor name)
+                                      '(age)))
+        (format t "dict after person: ~a~%" dict)
+        (setf class-slots (get-slots-from-class 'person dict))
+        (format t "slots for class person: ~a~%" class-slots)
+        (setf dict (insert-class-data dict 'worker '(person)
+                                      '(job)
+                                      '(salary)))
+        (format t "dict after person: ~a~%" dict))
+      #+end_src
+*** declaiming a function to avoid warnings in sbcl
+**** descprition
+     In the code we have a double recursive function calls.  This declaim is here to avoid warnings related to non defined functions
+**** code
+      #+begin_src lisp :results none :export code :tangle src/gagm.lisp
+      (declaim (ftype (function (t t ) t) get-all-slots-from-inherit))
+      #+end_src
+*** get-all-slots-from-class
+**** description
+     Returns the slots in a given class, including the inherited from the parents.
+**** code
+     #+begin_src lisp :results none :export code :tangle src/gagm.lisp
+     (defun get-all-slots-from-class (class-name dictionary)
+       (let* ((result
+               (let ((inherit
+                      (second (get-data-from-dictionary
+                               class-name dictionary))))
+                 (flatten-list (ordered-union
+                                (get-all-slots-from-inherit
+                                 inherit dictionary)
+                                (get-slots-from-class
+                                 class-name dictionary))))))
+         (if (equal result '(nil))
+             (setf result nil))
+         result))
+     #+end_src
+**** test
+***** simple test
+      #+begin_src lisp :results output :export code :tangle tests/gagm-tests.lisp
+      (let* ((dict nil)
+             (class-slots))
+        (setf dict (insert-class-data dict 'person () '(name :accessor name) '(age)))
+        (format t "dict after person: ~a~%" dict)
+        (setf class-slots (get-slots-from-class 'person dict))
+        (format t "slots for class person: ~a~%" class-slots))
+      #+end_src
+
+***** test with two classes
+      #+begin_src lisp :results output :export code :tangle tests/gagm-tests.lisp
+      (let* ((dict nil)
+             (class-slots))
+        (setf dict (insert-class-data dict 'person ()
+                                      '(name :accessor name)
+                                      '(age)))
+        (format t "dict after person: ~a~%" dict)
+        (setf class-slots (get-slots-from-class 'person dict))
+        (format t "slots for class person: ~a~%" class-slots)
+        (setf dict (insert-class-data dict 'worker '(person)
+                                      '(job)
+                                      '(salary)))
+        (format t "dict after worker: ~a~%" dict)
+        (format t "slots for worker: ~a~%"
+                (get-all-slots-from-class 'worker dict)))
+      #+end_src
+
+*** class-inherit
+**** description
+     Returns the parents of the given class.
+**** code
+     #+begin_src lisp :results none :export code :tangle src/gagm.lisp
+     (defun class-inherit (class-name dictionary)
+       (second (get-data-from-dictionary class-name dictionary)))
+     #+end_src
+**** test (no tests because we need another function)
+***** simple test
+      #+begin_src lisp :results output :export code :tangle tests/gagm-tests.lisp
+      (let* ((dict nil)
+             (class-parents))
+        (setf dict (insert-class-data dict 'person ()
+                                      '(name :accessor name)
+                                      '(age)))
+        (setf class-parents (class-inherit 'person dict))
+        (format t "parents for class person: ~a~%" class-parents)
+        (setf dict (insert-class-data dict 'worker '(person)
+                                      '(job)
+                                      '(salary)))
+        (format t "parents for class worker: ~a~%"
+                (class-inherit 'worker dict))
+        (setf dict (insert-class-data dict 'driver '()
+                                      '(car)))
+        (setf dict (insert-class-data dict 'boss-driver '(worker driver)
+                                      '()))
+        (format t "parents for class boss-driver: ~a~%"
+                (class-inherit 'boss-driver dict)))
+      #+end_src
+
+*** get-all-slots-from-inherit
+**** description
+     Returns the slots of the given class parents.
+**** code
+     #+begin_src lisp :results none :export code :tangle src/gagm.lisp
+     (defun get-all-slots-from-inherit (inherit dictionary)
+       (loop for inherit-act in inherit
+             collecting (get-all-slots-from-class inherit-act dictionary)))
+     #+end_src
+**** test
+***** simple test
+      #+begin_src lisp :results output :export code :tangle tests/gagm-tests.lisp
+      (let* ((dict nil)
+             (class-slots))
+        (setf dict (insert-class-data dict 'person () '(name :accessor name) '(age)))
+        (setf class-slots (get-all-slots-from-inherit '(person) dict))
+        (format t "slots for class person: ~a~%" class-slots))
+      #+end_src
+***** test with more than one class
+      #+begin_src lisp :results output :export code :tangle tests/gagm-tests.lisp
+      (let* ((dict nil)
+             (class-parents))
+        (setf dict (insert-class-data dict 'person ()
+                                      '(name :accessor name)
+                                      '(age)))
+        (setf class-parents (class-inherit 'person dict))
+        (setf dict (insert-class-data dict 'worker '(person)
+                                      '(job)
+                                      '(salary)))
+        (setf dict (insert-class-data dict 'driver '()
+                                      '(car)))
+        (setf dict (insert-class-data dict 'boss-driver '(worker driver)
+                                      '()))
+        (format t "all slots for boss-driver: ~a~%"
+                (get-all-slots-from-inherit '(person worker driver) dict)))
+      #+end_src
+      
+*** get-all-properties
+**** description
+     Returns all the slots in the given class.
+**** code
+     #+begin_src lisp :results none :export code :tangle src/gagm.lisp
+     (defun get-all-properties (class-name dictionary)
+       (second-elements (get-all-slots-from-class
+                         class-name dictionary)))
+     #+end_src
+**** TODO test
+***** TODO simple test
+      #+begin_src lisp :results output :export code :tangle tests/gagm-tests.lisp
+      (let* ((dict nil)
+             (class-slots))
+        (setf dict (insert-class-data dict 'person ()
+                                      '((name :accessor name) (age))))
+        (setf class-slots (get-all-slots-from-inherit
+                           '(person) dict))
+        (format t "slots for class person: ~a~%" class-slots))
+      #+end_src
+** global dicts used to track down all classes
+*** slots-dict
+**** description
+     A dictionary to store the slots
+**** code
+     #+begin_src lisp :results none :export code :tangle src/gagm.lisp
+     (defparameter slots-dict ())
+     #+end_src
+**** tests (no tests because it is a declaration)
+*** initarg-dict
+**** TODO description
+     A dictionary to store the initargs for each slot.  This is a list of lists.  The first element of these lists is the name of the class(???), and the rest is formed by the initargs.
+**** code
+     #+begin_src lisp :results none :export code :tangle src/gagm.lisp
+     (defparameter initarg-dict ())
+     #+end_src
+**** tests (no tests because it is a declaration)
+*** accessor-dict
+**** TODO description
+     Just like initarg-dict, but with the accessors instead of the intiargs.
+**** code
+     #+begin_src lisp :results none :export code :tangle src/gagm.lisp
+     (defparameter accessor-dict ())
+     #+end_src
+**** tests (no tests because it is a declaration)
+*** ctr-func-name-dict
+**** TODO description
+     Just like initarg-dict, but with the constructors function names.
+**** code
+     #+begin_src lisp :results none :export code :tangle src/gagm.lisp
+     (defparameter ctr-func-name-dict ())
+     #+end_src
+**** tests (no tests because it is a declaration)
+*** clear-properties-dict
+**** description
+     Clears the values of all the dictionaries.
+**** code
+     #+begin_src lisp :results none :export code :tangle src/gagm.lisp
+     (defun clear-properties-dict ()
+       (setf slots-dict nil)
+       (setf initarg-dict nil)
+       (setf accessor-dict nil))
+     #+end_src
+**** tests (no tests because it is a declaration)
+***** simple test
+      #+begin_src lisp :results output :export code :tangle tests/gagm-tests.lisp
+      (let* ()
+        (clear-properties-dict)
+        (format t "slots dict: ~a~%" slots-dict)
+        (format t "initarg dict: ~a~%" initarg-dict)
+        (format t "accessor dict: ~a~%" accessor-dict))
+      #+end_src
+** create-class-data
+*** description
+    This is a macro to store the whole definition of a class.
+    - class-name:    the name of the new class.
+    - documentation: the documentation for the class.
+    - inherit:       a list with the superclasses.
+    - slot-def:      a list with the new slots defined in this class.  We only need to define the new ones because the rest is computed from the super classes.
+    - ctr-function:  a function that should can be used to create instances of this class.  
+    - string-obj:    a list where the first element is the string format to be used in the print-obj function format, and the rest is the name of the slots that should be used to interpolate that string.
+
+    For instance, the following code:
+
+    #+begin_src  lisp
+    (create-class-data person
+                    "A class to represent a person."
+                    ()
+                    ((name :accessor name :initarg :name)
+                     (age  :accessor age  :initarg :age))
+                    (defun person (name age)
+                      (make-instance 'person
+                                     :name name
+                                     :age age))
+                    ("~a is ~a years old." name age))
+    #+end_src
+
+    expands into:
+    #+begin_src lisp
+    (PROGN
+      (DEFCLASS PERSON NIL
+        ((NAME :ACCESSOR NAME :INITARG :NAME)
+         (AGE :ACCESSOR AGE :INITARG :AGE))
+        (:DOCUMENTATION "A class to represent a person."))
+      (DEFUN PERSON (NAME AGE) (MAKE-INSTANCE 'PERSON :NAME NAME :AGE AGE))
+      (DEFMETHOD PRINT-OBJECT ((NODE PERSON) STREAM)
+          (FORMAT STREAM "~a is ~a years old." (NAME NODE) (AGE NODE))))
+    #+end_src
+   
+*** code
+    #+begin_src lisp :results none :export code :tangle src/gagm.lisp
+    (defmacro create-class-data (class-name
+                                 documentation
+                                 inherit
+                                 slots-def
+                                 ctr-funtion
+                                 string-obj)
+      `(progn
+         ;; definiendo la clase
+         (defclass ,class-name
+             ,inherit
+           ;; esta es la definicion de los slots
+              ,slots-def
+               (:documentation ,documentation))
+         ;; definiendo la funcion constructora.
+         ,ctr-funtion
+         ;; print-object de la clase definida.
+         ;; string-object: formato para definir la cadena a imprimir.
+         ;; stream salida del print-object
+         (defmethod print-object((node ,class-name) stream)
+           (format stream ,(car string-obj)
+                   ,@(loop for slot in (cdr string-obj)
+                           collecting `(,slot node))))))
+    #+end_src
+*** test
+**** simple test (to macroexpand)
+     #+begin_src lisp :results output :export code :tangle tests/gagm-tests.lisp
+     (create-class-data person
+                        "A class to represent a person."
+                        ()
+                        ((name :accessor name :initarg :name)
+                         (age  :accessor age  :initarg :age))
+                        (defun person (name age)
+                          (make-instance 'person
+                                         :name name
+                                         :age age))
+                        ("~a is ~a years old." name age))
+     #+end_src
+* code-generator-utils
+** description
+   In this section we add all the functions used to make the code generation process easier.
+** add the package
+  #+begin_src lisp :results none :export code :tangle src/gagm.lisp
+   (in-package :gagm)
+   #+end_src
+   
+** generic-function generate-code
+*** description
+    This is the basic function for the code generation process.  It receives 3 parameters, the node, the language, and the stream.
+*** code
+    #+begin_src lisp :results none :export code :tangle src/gagm.lisp
+    (defgeneric generate-code (node language stream)
+      (:documentation "This function writes to the stream `stream' the source code of the given node in the specified language."))
+    #+end_src
+
+*** tests (no tests because it is a definition)
+** macro gcodenil
+*** description
+    More than a macro this is just an abbreviation.  This is to write code to the nil stream, and it wraps the return inside a `with-output-to-string'.
+*** code
+    #+begin_src lisp :results none :export code :tangle src/gagm.lisp
+    (defmacro gcodenil (slot-name)
+      "More than a macro this is just an abbreviation."
+      `(with-output-to-string (s)
+         (generate-code (,slot-name node) lang s)))
+    #+end_src
+*** tests
+**** testing macroexpansion
+     #+begin_src lisp :results output :export code :tangle tests/gagm-tests.lisp
+     (gcodenil name)
+     #+end_src
+
+     #+RESULTS:
+     #+begin_src lisp
+     (WITH-OUTPUT-TO-STRING (S) (GENERATE-CODE (NAME NODE) LANG S))
+     #+end_src
+
+** macro gcodenil-exp
+*** description
+    This macro writes to the nil stream the result of evaluating the given expression.
+*** code
+    #+begin_src lisp :results none :export code :tangle src/gagm.lisp
+    (defmacro gcodenil-exp (expresion)
+      `(with-output-to-string (s) (generate-code ,expresion lang s)))
+    #+end_src
+*** tests
+**** testing macroexpansion
+     #+begin_src lisp :results output :export code :tangle tests/gagm-tests.lisp
+     (gcodenil-exp (+ 1 (age node)))
+     #+end_src
+
+     #+RESULTS:
+     #+begin_src lisp
+     (WITH-OUTPUT-TO-STRING (S) (GENERATE-CODE (+ 1 (AGE NODE)) LANG S))
+     #+end_src
+** variable gcode-slots-options
+*** description
+    The last parameter in a gcode is a &arg, where each arg is a list.  The elements in that list can be symbols or lists.  When it is a list we call gcodenil, when it is a list we call the operation indicated by =gcode-slot-options=, whose first parameter matches the first element in a list in gcode-options.
+
+    Supposedly, it is a code that requires the rest of the list.
+
+*** code
+    #+begin_src lisp :results none :export code :tangle src/gagm.lisp
+    (defparameter gcode-slots-options
+      '((:optional
+         (let* ((result (loop for x in args
+                              collect (if (x node)
+                                          (gcodenil x)
+                                          ""))))
+           (format nil "~{~a~%~}" result)))))
+    #+end_src
+*** tests (no tests because it is a macroexpansion)
+** variable recognize-patterns
+*** description
+    This is a variable to store some patterns that should be used in the code generation.  The values in this parameter can be used as input to symbol-macrolet.
+
+*** code
+    #+begin_src lisp :results none :export code :tangle src/gagm.lisp
+    (defparameter recognize-patterns
+      `((indent (increment-indentation lang))
+        (deindent (decrement-indentation lang))))
+    #+end_src
+*** tests (no tests because it is a macroexpansion)
+** macro add-new-patterns
+*** description
+    Using this macro we can add new patterns to the variable =recognize-patterns=.
+*** code
+    #+begin_src lisp :results none :export code :tangle src/gagm.lisp
+    (defmacro add-new-patterns (symbol pattern)
+      `(setf recognize-patterns
+             (append recognize-patterns
+                     (list (cons ',symbol ,pattern)))))
+    #+end_src
+*** tests
+**** testing macroexpansion 1
+     #+begin_src lisp :results output :export code :tangle tests/gagm-tests.lisp
+     (add-new-patterns newline (format stream "~%"))
+     #+end_src
+
+     #+RESULTS:
+     #+begin_src lisp
+     (SETF RECOGNIZE-PATTERNS
+           (APPEND RECOGNIZE-PATTERNS
+                   (LIST (CONS 'NEWLINE (FORMAT STREAM "~%")))))
+     #+end_src
+** macro gif
+*** description
+    This macro can be used in places where the code generation of a slot can be optional.  The semantic is the following: this macro receives a slot name, and we test if that slot is non nil.  If it isn't, we generate the code specified in =then-code=.  If the value of the slot is nil, we generate code specified in =else-code=.
+*** code
+    #+begin_src lisp :results none :export code :tangle src/gagm.lisp
+    (defmacro gif (slot-name
+                   &key
+                     (cond-code `(slot-value node ',slot-name))
+                     (then-code `(gcodenil ,slot-name))
+                     (else-code ""))
+      `(if ,cond-code
+            ,then-code
+            ,else-code))
+    #+end_src
+*** tests
+**** testing macroexpansion 1
+     #+begin_src lisp :results output :export code :tangle tests/gagm-tests.lisp
+     (gif name)
+     #+end_src
+
+     #+RESULTS:
+     #+begin_src lisp
+     (IF (SLOT-VALUE NODE 'NAME)
+         (GCODENIL NAME)
+         "")
+     #+end_src
+**** testing macroexpansion 2 (with then-code)
+     #+begin_src lisp :results output :export code :tangle tests/gagm-tests.lisp
+     (gif name :then-code (format stream "Mr ~a" (gcodenil name)))
+     #+end_src
+
+     #+RESULTS:
+     #+begin_src lisp
+     (IF (SLOT-VALUE NODE 'NAME)
+         (FORMAT STREAM "Mr ~a" (GCODENIL NAME))
+         "")
+     #+end_src
+** function make-gcodenil-list
+*** description
+    Given a list of symbols, return a list where each element is of the form (gcodenil symbol).  
+      Syntax:
+       (make-gcodenil-list list-of-symbols)
+       list-of-symbols: is a list of symbols.
+*** code
+    #+begin_src lisp :results none :export code :tangle src/gagm.lisp
+    (defun make-gcodenil-list (list-of-symbols)
+      "Given a list of symbols, return a list
+    where each element is of the form (gcodenil symbol).
+          Syntax:
+           (make-gcodenil-list list-of-symbols)
+           list-of-symbols: is a list of symbols"
+      (loop for data in list-of-symbols
+            collect (if (eq (type-of data) 'symbol)
+                        `(gcodenil ,data)
+                        ;; else
+                        (if (eq (type-of data) 'cons)
+                            (let* ((code (second
+                                          (assoc (first data)
+                                                 gcode-slots-options))))
+                              (if (eq code nil)
+                                  data
+                                  `(symbol-macrolet
+                                       ((args ',(cdr data))) ,code)))))))
+    #+end_src
+*** tests
+**** testing 
+     #+begin_src lisp :results output :export code :tangle tests/gagm-tests.lisp
+     (print (make-gcodenil-list `(name age job)))
+     #+end_src
+
+     #+RESULTS:
+     : 
+     : ((GCODENIL NAME) (GCODENIL AGE) (GCODENIL JOB)) 
+** macro gformat
+*** description
+    This macro is a thin layer above format.  The main diference is that the arguments to interpolate the string should be slot-names.  They will be processed with =make-gcodenil-list= and then passed on to format.
+*** code
+    #+begin_src lisp :results none :export code :tangle src/gagm.lisp
+    (defmacro gformat (stream format-string &rest slots)
+      (let* ((gcodenil-list (make-gcodenil-list slots)))
+        `(format ,stream ,format-string ,@gcodenil-list)))
+    #+end_src
+*** tests
+**** testing macroexpansion 1
+     #+begin_src lisp :results output :export code :tangle tests/gagm-tests.lisp
+     (gformat t "My name is ~a and I am ~a years old."
+              name age)
+     #+end_src
+
+     #+RESULTS:
+     #+begin_src lisp
+     (FORMAT T "My name is ~a and I am ~a years old."
+             (GCODENIL NAME) (GCODENIL AGE))
+     #+end_src
+** function make-gformat-instructions
+*** TODO description
+    Fill this description after you figure out what this code does.
+*** code
+    #+begin_src lisp :results none :export code :tangle src/gagm.lisp
+    (defun make-gformat-instructions (format-strings  args)
+    `(let* ((result-make-gformat ()))
+      ,@(loop for element in format-strings
+         collect (if (stringp element)
+                     `(setf result-make-gformat
+                            (concatenate 'string
+                                         result-make-gformat
+                                         (gformat nil ,element ,@(pop args))))
+                     (if (and (listp element)
+                              (eq (first element) 'sformat))
+                         `(setf result-make-gformat
+                                (concatenate 'string
+                                             result-make-gformat
+                                             (format nil ,@(cdr element))))
+                         element)))
+      (format stream  result-make-gformat)))
+    #+end_src
+*** TODO tests
+**** testing 
+     #+begin_src lisp :results output :export code :tangle tests/gagm-tests.lisp
+     
+     #+end_src
+** macro gindformat
+*** TODO description
+    Fill this description after you figure out what this code does.
+*** code
+    #+begin_src lisp :results none :export code :tangle src/gagm.lisp
+    (defmacro gindformat (stream (&rest format-strings) &rest format-args)
+        "The comment and rationale for this macro (in spanish) can be found in the file macro-para-gformat.org"
+        (declare (ignorable stream))
+        (let* ((gformat-list
+                (make-gformat-instructions
+                 format-strings format-args)))
+          `(macrolet ((indent-str (node)
+                        (declare (ignore node)) `(make-ind-str lang)))
+             (symbol-macrolet ,recognize-patterns
+               ,gformat-list))))
+    #+end_src
+*** TODO tests
+**** testing
+     #+begin_src lisp :results output :export code :tangle tests/gagm-tests.lisp
+     
+     #+end_src
+** macro gcode
+*** description
+    This macro is an abstraction over a pattern that constantly appears in this scenario, where to specify the code generation, we just need to define a string and the slots that should be used to interpolate that string.
+
+    If no args are passed to interpolate the string, then all the slots for that class are added automatically.
+
+    For instance, the following code:
+
+    expands into:
+*** code
+    #+begin_src lisp :results none :export code :tangle src/gagm.lisp
+    (defmacro gcode (class-name language
+                     (&rest format)
+                     &rest args)
+      (if (eq args nil)
+          (setf args (list (get-all-properties class-name accessor-dict))))
+      `(defmethod generate-code ((node ,class-name) (lang ,language) stream)
+         (gindformat stream ,format ,@args)))
+    #+end_src
+
+*** tests (we need gindformat)
+**** testing macroexpansion 1
+     #+begin_src lisp :results output :export code :tangle tests/gagm-tests.lisp
+     (gcode person natural-language
+                    ("My name is ~a and I am ~a years old.")
+                    (name age))
+     #+end_src
+
+     #+RESULTS:
+     #+begin_src lisp
+     (DEFMETHOD GENERATE-CODE ((NODE PERSON) (LANG NATURAL-LANGUAGE) STREAM)
+       (MACROLET ((INDENT-STR (NODE)
+                    (DECLARE (IGNORE NODE))
+                    `(MAKE-IND-STR LANG)))
+         (SYMBOL-MACROLET ((INDENT (INCREMENT-INDENTATION LANG))
+                           (DEINDENT (DECREMENT-INDENTATION LANG)))
+           (LET* ((RESULT-MAKE-GFORMAT NIL))
+             (SETF RESULT-MAKE-GFORMAT
+                   (CONCATENATE 'STRING RESULT-MAKE-GFORMAT
+                                (FORMAT NIL "My name is ~a and I am ~a years old." (GCODENIL NAME)
+                                        (GCODENIL AGE))))
+             (FORMAT STREAM RESULT-MAKE-GFORMAT)))))
+     #+end_src
+* mga
+** description
+   In this section we'll add all the code in the original file mga.lisp 
+** add the package
+  #+begin_src lisp :results none :export code :tangle src/gagm.lisp
+   (in-package :gagm)
+   #+end_src
+** functions to deal with dictionary properties
+*** update-dictionary-properties
+**** description
+     Updates the given properties in the dictionary.
+**** code
+     #+begin_src lisp :results none :export code :tangle src/gagm.lisp
+     (defun update-dictionary-properties (dict instruction-name inherit args)
+       (setf dict (insert-class-data dict instruction-name inherit args))
+       dict)
+     #+end_src
+**** TODO test
+     #+begin_src lisp :results output :export code :tangle tests/gagm-tests.lisp
+     (let* ((dict nil)
+            (class-data))
+       (setf dict (insert-class-data dict 'person () '(name :accessor name) '(age)))
+       (format t "dict after person: ~a~%" dict)
+  
+       (setf class-data (get-data-from-dictionary 'person dict))
+       (format t "class-data after remove data: ~a~%" class-data))
+     #+end_src
+** the standard print-obj for defnode
+*** description
+    In this section we add the functions related to the print object
+*** parameters for print-object letf and right keys
+**** description
+     These are the characters used in the default print-object.  If you want to change the enclosing character for the print-object, you should change them.
+**** code
+     #+begin_src lisp :results none :export code :tangle src/gagm.lisp
+     (defparameter *default-print-object-left-key* "(")
+     (defparameter *default-print-object-right-key* ")")
+     (defparameter print-object-left-key *default-print-object-left-key*)
+     (defparameter print-object-right-key *default-print-object-right-key*)
+     #+end_src
+**** test (No tests because it is a parameter definition)
+*** functions to change the print-object right and left keys
+**** code
+     #+begin_src lisp :results none :export code :tangle src/gagm.lisp
+     (defun update-left-key (new-key)
+       "Sets the new left key for the print-object."
+       (setf print-object-left-key new-key))
+
+     (defun update-right-key (new-key)
+       "Sets the new rigth key for the print-object."
+       (setf print-object-right-key new-key))
+
+     (defun update-key (l-key r-key)
+       "Sets the new left and right keys for the print-object."
+       (update-left-key l-key)
+       (update-right-key r-key))
+
+     (defun set-print-object-keys-to-default ()
+            "Sets the new left and right keys for the print-object."
+            (update-left-key *default-print-object-left-key*)
+            (update-right-key *default-print-object-right-key*))
+     #+end_src
+**** test
+     #+begin_src lisp :results output :export code :tangle tests/gagm-tests.lisp
+     (let* ()
+       (format t "~%Testing print-object keys:~%")
+  
+       (update-left-key "<")
+       (format t "Left key for print-object: ~a (expect >)~%"
+               print-object-left-key)
+  
+       (format t "Right key for print-object: ~a~%"
+               print-object-right-key)
+       (update-right-key ">")
+       (format t "Rigth key for print-object: ~a (expect >)~%"
+               print-object-right-key)
+
+  
+       (update-key "[" "]")
+       (format t "Left key for print-object: ~a (expect [)~%"
+               print-object-left-key)
+       (format t "Right key for print-object: ~a (expect ])~%"
+               print-object-right-key)
+
+       (set-print-object-keys-to-default)
+       (format t "Left key for print-object: ~a (expect ~a)~%"
+               print-object-left-key
+               ,*default-print-object-left-key*)
+       (format t "Right key for print-object: ~a (expect ~a)~%"
+               print-object-right-key
+               ,*default-print-object-right-key*)
+
+       )
+     #+end_src
+
+     #+RESULTS:
+     : Left key for print-object: (
+     : Rigth key for print-object: )
+*** standard print-object
+**** description
+     This is the standard print-object that will be used by the defnode macro.
+**** code
+     #+begin_src lisp :results none :export code :tangle src/gagm.lisp
+     (defun standard-print-object (name args separator function)
+       (let* ((format-string (format nil "~a~a ~~{~~a~a~~}~a"
+                                     print-object-left-key
+                                     name separator
+                                     print-object-right-key)))
+         (format nil format-string
+                 (loop for arg in args
+                       collecting  (list arg function)))))
+     #+end_src
+**** test
+     #+begin_src lisp :results output :export code :tangle tests/gagm-tests.lisp
+       (let* ()
+         (format t "Standard-print-object for a person with name and age:
+     ~a~%"
+                 (standard-print-object 'person '(name age) " " "~a")))
+     #+end_src
+
+     #+RESULTS:
+     : standard-print-object for a person with name and age:
+     : (PERSON (NAME ~a) (AGE ~a) )
+** functions to deal with functions (not sure if it used)
+*** description
+    This functions are related to the definition of functions that do not return anything.  I'm not sure if they are used at all.
+*** function check-parameters-func
+**** description (in spanish)
+     Convierte los simbolos que pertenecen a los parametros en simbolos cuyo valor es el nombre del simbolo para que la funcion pueda guardar su valor.
+**** code
+     #+begin_src lisp :results none :export code :tangle src/gagm.lisp
+     (defun chek-parameters-func (parameters code)
+       (let* ((result ()))
+         (loop for element in code
+               doing
+               (if
+                (member element parameters)
+                (setf result
+                      (append result
+                              (list (read-from-string
+                                     (format nil "'~a" element)))))
+                (if
+                 (atom element)
+                 (setf result (append result (list element)))
+                 (setf result (append result
+                                      (list
+                                       (chek-parameters-func
+                                        parameters element)))))))
+         result))
+     #+end_src
+**** TODO test
+     #+begin_src lisp :results output :export code :tangle tests/gagm-tests.lisp
+       
+     #+end_src
+
+*** function remove-type-to-type-parameters
+**** description (in spanish)
+     Convierte los parametros de una funcion de un lenguaje de tipado estatico a los parametros de una funcion en lenguajes de tipado dinamico.   
+
+     Ejemplo ((int a) (int b))-->(a b)
+
+     para pasarselos como argumentos a la funcion chek-parameters-func
+**** code
+     #+begin_src lisp :results none :export code :tangle src/gagm.lisp
+     (defun remove-type-to-type-parameters (parameters)
+       (loop for (type name) in parameters
+             collect  name))
+     #+end_src
+**** test
+     #+begin_src lisp :results output :export code :tangle tests/gagm-tests.lisp
+     (format t "'((int a) (double b)): ~a~%"
+             (remove-type-to-type-parameters '((int a) (double b))))  
+     #+end_src
+*** function normalize-code
+**** description (in spanish)
+      -->parameters: son los parametros de la funcion para la cual se desea generar el codigo code en el cual se quiere tener el valor de los simbolos como su nombre.
+**** code
+     #+begin_src lisp :results none :export code :tangle src/gagm.lisp
+     (defun normalize-code (parameters code)
+       (if (not (atom (car parameters)))
+           (setf parameters (remove-type-to-type-parameters parameters)))
+       (chek-parameters-func parameters code))
+     #+end_src
+**** TODO test
+     #+begin_src lisp :results output :export code :tangle tests/gagm-tests.lisp
+       
+     #+end_src
+
+*** macro g-def-void-func
+**** description (in spanish)
+     crea una funcion para crear funciones.
+
+     por ejemplo (g-def-void-func defineFun).
+
+     Luego podemos hacer algo en nuestro lenguaje como:
+
+     (definefun suma (x y z) (+ x (+ y z)))
+ 
+     ver que en la generacion de la funcion todos
+     los nodos internos deben estar previamente
+     definidos en el lenguaje para poder exportarlos.
+     g-def-void-func solo es para funciones que no retornan.
+     en csharp serian los metodos void,
+     en python son metodos que no retornan
+     en lisp como siempre se retorna algo hago incapie
+     en que son funciones que no tienen un return o
+     return-from en su cuerpo.
+
+     alternativa y me gusta porque utilizo las clases
+     basicas implementadas.
+     no asustarme porque puedo recorrer los parametros
+     aunqe sean simbolos normal.
+
+     ->ejemplo de entrada con tipado estatico
+     -->(generate-def-void-func-c def): indica que se
+     quiere definir funciones con la funcion def 
+     ----------------------------------------------
+     -->(def suma ((int a)(int b)) (sum-class a b))
+     -> ejemplo de entrada con tipado dinamico
+     -->(def suma (a  b) (sum-class a b))
+
+**** code
+     #+begin_src lisp :results none :export code :tangle src/gagm.lisp
+     (defmacro g-def-void-func (funtion-name)
+       `(defmacro ,funtion-name (name parameters code)
+          (setf code-aux (normalize-code parameters code))
+          `(method-class ',name ',parameters ,code-aux)))
+     #+end_src
+**** TODO test
+     #+begin_src lisp :results output :export code :tangle tests/gagm-tests.lisp
+     
+     #+end_src
+
+** defnode utils
+*** description
+    In this section I'll add some functions used in the defnode macro.
+*** function only-first-element-in-list
+**** description
+     Given a list where each element is a list or an atom, returns the atom or the first element in the list.
+
+     Example: '((1 2 3 4) (5 6) (7) 8) ----> (1 5 7 8)
+**** code
+     #+begin_src lisp :results none :export code :tangle src/gagm.lisp
+     (defun only-first-element-in-list (args_trio)
+       (loop for x in args_trio
+             collect (if (atom x)
+                         x
+                         (car x))))
+     #+end_src
+**** test
+     #+begin_src lisp :results output :export code :tangle tests/gagm-tests.lisp
+     (let* ((test-data '((1 2 3 4) (5 6) (7) 8)))
+       (format t "first element in ~a:~%~17t~a~%"
+               test-data
+               (only-first-element-in-list test-data)))  
+     #+end_src
+
+     #+RESULTS:
+     : first element in ((1 2 3 4) (5 6) (7) 8):
+     :                  (1 5 7 8)
+** defnode
+*** description
+    This is the macro that creates the classes and stores all the information related to it.  It is documented quite well in Yasmay's bachelor's thesis.
+*** code
+    #+begin_src lisp :results none :export code :tangle src/gagm.lisp
+    (defmacro defnode (class-name inherit
+                       (&rest args)
+                       &key
+                         (documentation "No any documentation for this node.")
+                         (ctr-type 'function)
+                         (ctr-name class-name)
+                         (lambda-list nil lambda-list-p)
+                         (lambda-key nil lambda-key-p)
+                          ;; para indicar donde se debe llamar
+                          ;; al make-instance, se pone la palabra make-ctr
+                         (ctr-body 'make-ctr)
+                         ;; before de la funcion constructora
+                         ;; (before nil before-p)
+                         (string-obj nil string-obj-p))
+  
+  
+      (let* ((filter-args (only-first-element-in-list args))
+             (slots-inherit (get-all-slots-from-inherit inherit slots-dict))
+             (filter-args (ordered-set-difference filter-args slots-inherit))
+             (slots-def
+              (loop for data in args
+                    collect (if (atom data)
+                                (list data
+                                      :accessor data
+                                      :initarg (make-keyword ":~a" data)
+                                      :allocation :instance)
+                                (let* ((name (first data)))
+                                  (destructuring-bind
+                                        (slot-name
+                                         &key
+                                         (accessor name)
+                                         (initarg (make-keyword ":~a" name))
+                                         (documentation "empty doc")
+                                         (initform nil)
+                                         (allocation :instance)
+                                         ;; optional es una lista para
+                                         ;; modificadores que se quieran
+                                         ;; agregar.
+                                         ;; por ejemplo en la
+                                         ;; definicion del slot x:
+                                         ;; (x :accesor superx
+                                         ;;    :optional (:read 34))
+                                         (optional nil)) 
+                                      data
+                                    (append (list slot-name
+                                                  :accessor accessor
+                                                  :initarg initarg
+                                                  :allocation allocation
+                                                  :initform initform
+                                                  :documentation documentation)
+                                            optional)))))))
+        ;; recordar poner que sea cualquier modificador,
+        ;; es solo pasarselo por parametor y
+        ;; append a la lista de slots-def
+        (let* ((accessor-def (loop for data in slots-def
+                                collecting (list (car data) (third data))))
+               (initarg-def (loop for data in slots-def
+                               collecting  (list (car data)
+                                                 (make-keyword
+                                                  "~a"
+                                                  (fifth data))))))
+          (setf slots-dict (update-dictionary-properties
+                            slots-dict
+                            class-name
+                            inherit
+                            filter-args))
+          (setf accessor-dict (update-dictionary-properties
+                               accessor-dict
+                               class-name
+                               inherit
+                               accessor-def))
+          (setf initarg-dict (update-dictionary-properties
+                              initarg-dict
+                              class-name
+                              inherit
+                              initarg-def)))
+        (let* ((all-accessor (get-all-properties
+                              class-name accessor-dict))
+               (all-initarg (get-all-properties
+                             class-name initarg-dict))
+               ;; El comentario siguiente es
+               ;; valido solo para las variables que
+               ;; se definen a continuacion.         
+               ;; Esta region del let* es solo
+               ;; para asignar valores por defecto
+               ;; a los parametros con el modificador &key activo.
+               (ctr-type (if (eq ctr-type 'abstract)
+                             'abstract
+                             (if (eq ctr-type 'macro)
+                                 'defmacro
+                                 (if (eq ctr-type 'function)
+                                     'defun
+                                     'defmethod))))
+               (parameters (if (not lambda-list-p)
+                               (if (not lambda-key-p)
+                                   all-initarg
+                                   (append (list lambda-key) all-initarg))
+                                      lambda-list))
+               (new-ctr-body (let* ((body-aux
+                                     (if (eq ctr-type 'defun)
+                                         `(make-instance
+                                           ',class-name
+                                           ,@(loop for initarg-name
+                                                   in all-initarg
+                                                   collect (make-keyword
+                                                            ":~a" initarg-name)
+                                                   collect (make-keyword
+                                                            "~a" initarg-name)))
+                                         (if  (eq ctr-type 'defmacro)
+                                              `(make-instance
+                                                ',class-name
+                                                ,@(loop for initarg-name
+                                                        in all-initarg
+                                                        collect
+                                                        (make-keyword
+                                                         ":~a" initarg-name)
+                                                        collect
+                                                        (read-from-string
+                                                         (concatenate
+                                                          'string
+                                                          "`,"
+                                                          (symbol-name
+                                                           initarg-name)))))))))
+                               `(symbol-macrolet ((make-ctr ,body-aux))
+                                  ,ctr-body)))
+               (n-string-obj (if (and string-obj-p
+                                      (not (eq nil string-obj)))
+                                 string-obj
+                                 (append (list (standard-print-object
+                                                class-name all-accessor
+                                                " "  "~a"))
+                                         all-accessor)))
+               (ctr-func (if (eq ctr-type 'abstract)
+                             nil
+                             `(,ctr-type
+                               ,ctr-name
+                               ,parameters
+                               ,new-ctr-body))))
+          (setf ctr-func-name-dict
+                (append (list (list class-name ctr-name))
+                        (remove-class-data class-name ctr-func-name-dict)))
+          `(create-class-data ,class-name
+                              ,documentation
+                              ,inherit
+                              ,slots-def
+                              ,ctr-func
+                              ,n-string-obj))))
+    #+end_src
+*** test
+    #+begin_src lisp :results output :export code :tangle tests/gagm-tests.lisp
+       
+    #+end_src
+
+** defabsnode
+*** description
+    A macro to define abstract classes.  It is a wrapper around defnode.
+**** code
+     #+begin_src lisp :results none :export code :tangle src/gagm.lisp
+     (defmacro defabsnode (class-name inherit (&rest args)
+                           &key
+                             (documentation
+                              "No any documentation for this node.")
+                             (ctr-type 'abstract)
+                             (string-obj nil))
+       `(defnode ,class-name ,inherit
+          ,args
+          :documentation ,documentation
+          :ctr-type ,ctr-type
+          :string-obj ,string-obj))
+     #+end_src
+**** test
+     #+begin_src lisp :results output :export code :tangle tests/gagm-tests.lisp
+       
+     #+end_src
+* Tutorial and example
+** description
+   In this section we'll create the language basar from Yasmany's bachelor thesis.
+** basar operations
+   This is a very basic language where we can assign the result of arithmetic operations to variables.
+
+   For example, something like x = 5*(y + 2).
+
+   The operations are:
+
+   - addition
+   - multiplication
+   - assignment (to a variable)
+   - variable reference
+   - variable definition
+   - print a variable
+   - define a program
+
+   In the next section we define the classes needed to create this language.
+** system initialization
+*** tangle this file
+    The first step is to tangle the file gagm.org.
+*** start slime
+    We are using emacs, so the tutorial will be emacs centered.  The next step is to start lisp.  In this case we'll use slime.
+*** load the tangled files
+    We have to set the working directory to an appropriate value, and load the file "src/load-gagm.lisp".
+*** change to the gagm package
+    We can do that with =(in-package :gagm)=.
+** set the package
+  #+begin_src lisp :results none :export code :tangle tests/basar.lisp
+   (in-package :gagm)
+   #+end_src
+** ast classes
+   In this section we add all the classes needed to create basar.  To do that, we are going to use the macro *defnode*.
+*** binary-operation
+**** description
+     The binary operator is the base for the addition, multiplication, and assignment.
+**** code
+   #+begin_src lisp :results none :export code :tangle tests/basar.lisp
+   (defabsnode binary-operator ()
+     ((left-hand) (rigth-hand)))
+    #+end_src
+*** addition
+**** description
+     The addition inherits from binary-operator, but it is not an abstract class.  That's why we use defnode instead of *defabsnode*.
+**** code
+   #+begin_src lisp :results none :export code :tangle tests/basar.lisp
+   (defnode add (binary-operator)
+     ())
+    #+end_src
+**** test
+   #+begin_src lisp :results none :export code :tangle tests/basar-tests.lisp
+   (format t "sum node: ~a~%" (add 3 4))
+   #+end_src
+*** multiplication
+**** description
+     The multiplication inherits from binary-operator, but it is not an abstract class.  That's why we use defnode instead of *defabsnode*.
+**** code
+   #+begin_src lisp :results none :export code :tangle tests/basar.lisp
+   (defnode mult (binary-operator)
+     ())
+    #+end_src
+**** test
+   #+begin_src lisp :results none :export code :tangle tests/basar-tests.lisp
+   (format t "multiplication node: ~a~%" (mult 3 4))
+   #+end_src
+*** assignment
+**** description
+     The assignment inherits from binary-operator, but it is not an abstract class.  That's why we use defnode instead of *defabsnode*.
+
+     In this case, we change the name of the constructor to call it *assign-to*.
+**** code
+   #+begin_src lisp :results none :export code :tangle tests/basar.lisp
+   (defnode assignment (binary-operator)
+     ()
+     :ctr-name assign-to)
+    #+end_src
+**** test
+   #+begin_src lisp :results none :export code :tangle tests/basar-tests.lisp
+   (format t "assignment node: ~a~%" (assign-to 3 4))
+   #+end_src
+*** variable-reference
+**** description
+     The variable reference is a way to refer to a variable.  It has a name (the name of the variable being referenced).
+
+**** code
+   #+begin_src lisp :results none :export code :tangle :tangle tests/basar.lisp
+   (defnode var-reference ()
+     ((var-name)))
+    #+end_src
+**** test
+   #+begin_src lisp :results none :export code :tangle tests/basar-tests.lisp
+   (format t "variable reference: ~a~%" (var-reference "x"))
+   #+end_src
+*** variable-definition
+**** description
+     With variable definition node we can create new variables.
+
+     In this case, the constructor is a macro because when we define a variable, we want to also create a symbol with the same name of the variable that in its symbol-value has the a reference to that variable.
+**** code
+   #+begin_src lisp :results none :export code :tangle tests/basar.lisp
+   (defnode var-declaration ()
+     ((var-name))
+     :ctr-type macro
+     :ctr-name new-var
+     :ctr-body `(progn 
+                  (setf ,var-name
+                    (var-reference ',var-name))
+                  (make-instance 'var-declaration
+                                 :var-name ',var-name)))
+    #+end_src
+**** test
+   #+begin_src lisp :results none :export code :tangle tests/basar-tests.lisp
+   (let* (x)
+     (format t "variable declaration:~%~5t~a~%" (new-var x)))
+   #+end_src
+*** print
+**** description
+     This node represents a) print stament.  It will receive only an expresion, and it should print it.
+
+     We'll use the name bprint instead of print to avoid a name clash with the original print.
+**** code
+   #+begin_src lisp :results none :export code :tangle tests/basar.lisp
+   (defnode print-node ()
+     ((what-to-print))
+     :ctr-name bprint)
+    #+end_src
+**** test
+   #+begin_src lisp :results none :export code :tangle tests/basar-tests.lisp
+   (format t "print statement: ~a~%" (bprint (add 4 3)))
+   #+end_src
+*** program
+**** description
+     This node represents a basar program.  It will receive a list of basar instructions.
+
+     We'll use the name bprogram instead of print to avoid a possible name clash with =program=.
+
+     It will be a macro to avoid two problems.
+
+     The first one are warnings in the variable declarations.  These warnings will be the result of the =setf= command in the new-var macro, because the symbols that are being setf'ed are not defined as parameters.  This could be solved if we change the =setf= instruction for a =defparameter=, but that would unleash the second problem: after the program is run all the declared variables will remain in the lisp memory =:-o=.
+
+     To avoid that, in this macro we'll iterate through all the instructions and for each new-var we find we add that symbol to a =let= enclosing the program.
+**** code
+   #+begin_src lisp :results none :export code :tangle tests/basar.lisp
+   (defnode program-node ()
+     ((instructions))
+     :ctr-name bprogram
+     :lambda-key &rest
+     :ctr-type macro
+     :ctr-body (let* ((declared-var (loop for inst in instructions
+                                          if (and (listp inst)
+                                                  (symbolp (first inst))
+                                                  (equal 'new-var
+                                                         (first inst)))
+                                          collect (second inst))))
+                 `(let* ,declared-var
+                    (make-instance 'program-node
+                                   :instructions (list ,@instructions)))))
+    #+end_src
+**** test
+***** testing macro expansion
+    #+begin_src lisp :results none :export code :tangle tests/basar-tests.lisp
+    (format t "~a~%"
+            (bprogram
+             (new-var x)
+             (new-var y)
+             (assign-to x 5)
+             (assign-to y (mult 3 (add x 5)))
+             (bprint y)))
+    #+end_src
+***** testing generated code
+    #+begin_src lisp :results none :export code :tangle tests/basar-tests.lisp
+    (format t "~a~%"
+            (bprogram
+             (new-var x)
+             (new-var y)
+             (assign-to x 5)
+             (assign-to y (mult 3 (add x 5)))
+             (bprint y)))
+    #+end_src
+** code generation
+*** description
+    In this section we describe how to write the code generation routines for the AST nodes defined in the previous section.
+
+    To do that we need to define the class that represent the (target) language and create an instance of that class.
+
+    Then we need to specify the code-generation for each node in each language.
+*** language definitions
+**** description
+     Here, I'm going to create just one language: common-lisp.
+
+     I'll create the classes using defnode to avoid the creation of a constructor =;-)=.
+**** basic-language
+***** definition of the language
+****** description
+       A basic language we'll define the operations for the basic elements such as numbers, strings, and so on.
+****** code
+      #+begin_src lisp :results none :export code :tangle tests/basar.lisp
+      (defnode basic-language () ())
+      #+end_src
+****** test (or instance)
+      #+begin_src lisp :results none :export code :tangle tests/basar-tests.lisp
+	(defparameter *basic-language* (basic-language))
+      #+end_src
+**** common lisp
+***** definition of the class for the language
+****** code
+      #+begin_src lisp :results none :export code :tangle tests/basar.lisp
+      (defnode common-lisp (basic-language) ())
+      #+end_src
+****** test (or instance)
+      #+begin_src lisp :results none :export code :tangle tests/basar.lisp
+      (defparameter *cl* (common-lisp))
+      #+end_src
+*** code generation
+**** basic language
+***** number
+****** code
+      #+begin_src lisp :results none :export code :tangle tests/basar.lisp
+      (defmethod generate-code ((obj number) (lang basic-language) stream)
+        (format stream "~a" obj))
+      #+end_src
+****** test
+      #+begin_src lisp :results output :export code :tangle tests/basar-tests.lisp
+      (generate-code 4 *basic-language* t)
+      #+end_src
+***** string
+****** code
+      #+begin_src lisp :results none :export code :tangle tests/basar.lisp
+      (defmethod generate-code ((obj string) (lang basic-language) stream)
+        (format stream "~a" obj))
+      #+end_src
+****** test
+      #+begin_src lisp :results output :export code :tangle tests/basar-tests.lisp
+      (generate-code "hello world!" *basic-language* t)
+      #+end_src
+***** symbol
+****** code
+      #+begin_src lisp :results none :export code :tangle tests/basar.lisp
+      (defmethod generate-code ((obj symbol) (lang basic-language) stream)
+        (format stream "~a" (symbol-name obj)))
+      #+end_src
+****** test
+      #+begin_src lisp :results output :export code :tangle tests/basar-tests.lisp
+      (generate-code 'hello-world *basic-language* t)
+      #+end_src
+***** program
+****** description
+       In BASAR a program is a list of instructions.  As in this language there is no need to indent or to open or close scopes, in any target language a program is a list of instructions separated by a newline.
+
+       As that is true for "any" language, we'll define the code generation for the program-node for the basic-language.
+
+       We generate the code first to a string, because if the desired stream is =nil=, some pieces of code might get lost.
+****** code
+     #+begin_src lisp :results none :export code :tangle tests/basar.lisp
+     (defmethod generate-code ((node program-node) (lang basic-language) stream)
+       (let* ((generated-code (with-output-to-string (s)
+                                (loop for inst in (instructions node)
+                                      do (generate-code inst lang s)
+                                      do (format s "~%")))))
+         ;; let's write s to the desired format
+         (format stream "~a" generated-code)))
+     #+end_src
+****** test
+     #+begin_src lisp :results none :export code :tangle tests/basar-tests.lisp
+     (let* ((node (bprogram 3 "hola" 'mundo 4)))
+       (format t "Testing the code generation for program:~%")
+       (generate-code node *cl* t))
+     #+end_src
+**** common lisp
+***** description
+      In this section we define how to write each node of the AST in common lisp.
+
+      As the code generation for these node is very simple, in most cases we'll use the macro =gcode=.  When we use something diferent, we'll write it in the description.  Otherwise, there won't be description.
+***** addition
+****** code
+     #+begin_src lisp :results none :export code :tangle tests/basar.lisp
+     (gcode add common-lisp ("(+ ~a ~a)") (left-hand rigth-hand))
+     #+end_src
+****** test
+     #+begin_src lisp :results none :export code :tangle tests/basar-tests.lisp
+     (let* ((node (add 3 4)))
+       (generate-code node *cl* t))
+     #+end_src
+***** multiplication
+****** code
+     #+begin_src lisp :results none :export code :tangle tests/basar.lisp
+     (gcode mult common-lisp ("(* ~a ~a)") (left-hand rigth-hand))
+     #+end_src
+****** test
+     #+begin_src lisp :results none :export code :tangle tests/basar-tests.lisp
+     (let* ((node (mult 3 4)))
+       (generate-code node *cl* t))
+     #+end_src
+***** assignment
+****** code
+     #+begin_src lisp :results none :export code :tangle tests/basar.lisp
+     (gcode assignment common-lisp ("(setf ~a ~a)") (left-hand rigth-hand))
+     #+end_src
+****** test
+     #+begin_src lisp :results none :export code :tangle tests/basar-tests.lisp
+     (let* ((node (assign-to 3 4)))
+       (generate-code node *cl* t))
+     #+end_src
+***** variable-reference
+****** code
+     #+begin_src lisp :results none :export code :tangle tests/basar.lisp
+     (gcode var-reference common-lisp ("~a") (var-name))
+     #+end_src
+****** test
+     #+begin_src lisp :results none :export code :tangle tests/basar-tests.lisp
+     (let* ((node (var-reference 'x)))
+       (generate-code node *cl* t))
+     #+end_src
+***** variable-declaration
+****** code
+     #+begin_src lisp :results none :export code :tangle tests/basar.lisp
+     (gcode var-declaration common-lisp
+            ("(defparameter ~a nil)")
+            (var-name))
+     #+end_src
+****** test
+     #+begin_src lisp :results none :export code :tangle tests/basar-tests.lisp
+     (let* (x
+            (node (new-var x)))
+       (generate-code node *cl* t))
+     #+end_src
+***** print
+****** code
+     #+begin_src lisp :results none :export code :tangle tests/basar.lisp
+     (gcode print-node common-lisp
+            ("(print ~a)")
+            (what-to-print))
+     #+end_src
+****** test
+     #+begin_src lisp :results none :export code :tangle tests/basar-tests.lisp
+     (let* (x
+            (node (bprint 3)))
+       ;; first we create a variable named x
+       (new-var x)
+       (terpri)
+  
+       (generate-code node *cl* t)
+       (terpri)
+  
+       (setf node (bprint (add 3 4)))
+       (generate-code node *cl* t)
+       (terpri)
+  
+       (setf node (bprint (add x 4)))
+       (generate-code node *cl* t))
+     #+end_src
+***** program
+****** description
+In the case of program, there is no need to write the code because it inherits from the =basic-language=.  This section is here to test a full example.
+****** code (no need, it is inherited from basic-language)
+****** test
+      #+begin_src lisp :results none :export code :tangle tests/basar-tests.lisp
+      (let* ((node (bprogram
+                    (new-var x)
+                    (new-var y)
+                    (assign-to x 5)
+                    (assign-to y (add 5 (mult 3 x)))
+                    (bprint y))))
+        (format t "Testing the code generation for program:~%")
+        (generate-code node *cl* t)
+
+        ;; now we'll write the code to a file
+        (with-open-file (f "src/basar-example.lisp"
+                           :direction :output
+                           :if-exists :supersede)
+          (generate-code node *cl* f)))
+
+
+      #+end_src
+   
+
+* TODO emacs syntax highlight related stuff
+*** description
+    In this section we add some functions related to the automatic generation of syntax highlight and other emacs utilities for the DSLs created using gagm.
+*** function get-all-ctr-func-name
+**** description
+     Returns a list with all the constructors in the dsl.  It receives a dict.
+**** code
+     #+begin_src lisp :results none :export code
+     (defun get-all-ctr-func-name (dict)
+         (loop for (class-name func-name) in dict
+              collecting func-name))
+     #+end_src
+**** test
+     #+begin_src lisp :results output :export code
+       
+     #+end_src
+
+*** macro dsl-syntax-highlighting
+**** description
+     Returns a list with all the constructors in the dsl.  It receives a dict.
+**** code
+     #+begin_src lisp :results none :export code 
+     (defmacro dsl-syntax-highlighting (dsl-name 
+                                        (&key
+                                         keywords
+                                         builtin-face
+                                         comment-delimiter-face 
+                                         comment-face
+                                         constant-face
+                                         doc-face
+                                         function-name-face
+                                         negation-char-face
+                                         prepocessor-face
+                                         regexp-grouping-backslash 
+                                         regexp-grouping-construct 
+                                         string-face
+                                         type-face
+                                         variable-name-face
+                                         warning-face)
+                                &optional (file ""))
+  (if (equal keywords nil)
+      (setf keywords (get-all-ctr-func-name ctr-func-name-dict)))
+  `(language-syntax-highlighting
+    ,dsl-name (:keywords ,keywords
+               :builtin-face ,builtin-face
+               :comment-delimiter-face ,comment-delimiter-face 
+               :comment-face ,comment-face
+               :constant-face ,constant-face
+               :doc-face ,doc-face
+               :function-name-face ,function-name-face
+               :negation-char-face ,negation-char-face
+               :prepocessor-face ,prepocessor-face
+               :regexp-grouping-backslash ,regexp-grouping-backslash 
+               :regexp-grouping-construct ,regexp-grouping-construct 
+               :string-face ,string-face
+               :type-face ,type-face
+               :variable-name-face ,variable-name-face
+               :warning-face ,warning-face)
+    ,file))
+     #+end_src
+**** test
+     #+begin_src lisp :results output :export code
+       
+     #+end_src
+* TODO Next steps [0/2]                                            :noexport:
+  - [ ] declare what functions should be exported
+  - [ ] add the syntax highlighting mechanism
